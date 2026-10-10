@@ -117,6 +117,15 @@ Local verification establishes parsing, serialization, and the available decoded
 
 Changed saves retain `<filename>.xgwx-mcp-backup-<random suffix>` beside the project. A persistent `<filename>.xgwx-mcp.lock` sidecar coordinates cooperating server processes across atomic replacements. Coordinate saves with editors such as XG5000 that do not use this advisory lock.
 
+### Unix lock-file flags
+
+The `libc` dependency supplies `O_NOFOLLOW` and `O_CLOEXEC` to
+[`lock_file`](src/storage.rs) through Rust's `OpenOptionsExt::custom_flags`:
+`O_NOFOLLOW` rejects a symlink at the lock-file path's final component, and
+`O_CLOEXEC` closes the descriptor when the process executes another program.
+These flags are applied only on Unix. The server checks that the opened sidecar
+is a regular file, then acquires its exclusive advisory lock through `fs2`.
+
 ## New project files
 
 `list_templates` returns supported `creation_choices` with CPU models and program
