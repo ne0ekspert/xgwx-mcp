@@ -12,7 +12,7 @@ All tool arguments and inspection DTO fields use snake_case. Operation names are
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
-| `list_templates` | none | Bundled template IDs, native names/default CPU, source hashes, identity policy and probed compatible CPU models. |
+| `list_templates` | none | Compatibility profile IDs, default names/CPU, generated hashes, identity policy and probed compatible CPU models. |
 | `create_file` | `path`, optional `project_name`, `program_name`, `cpu_model`, `program_language`, `template`, `operations=[]`, `dry_run=false` | Created file revision, selected names/CPU/language, template, results and validation; no original revision or backup. |
 | `inspect_file` | `path`, `section="overview"`, optional `program_index`, `offset=0`, `limit=100` | `{path, revision, data}` |
 | `list_modules` | `path`, offset/limit | Revision and installed modules/settings/rack context. |
@@ -85,10 +85,11 @@ SFC text export detects native SFC XML before ladder decoding. Supported charts 
 
 ## Project-file creation
 
-Embed native blank XGK LD, XGI IEC LD and XGI SFC projects as server-owned seeds;
-record source paths/hashes in templates/manifest.json. Do not accept arbitrary
-client template paths or depend on sibling fixtures at runtime. Preserve native
-seed internal identities and unselected defaults rather than inventing undocumented GUID,
+Generate XGK LD and XGI LD/SFC creation profiles through libxgwx::create_project;
+source paths/hashes for library defaults are recorded in
+libxgwx/src/project_defaults/manifest.json. Do not accept arbitrary
+client template paths or read/embed template .xgwx files for creation. Preserve native
+library default identities and unselected defaults rather than inventing undocumented GUID,
 parameter or cache rewriting. list_templates reports default names/model and
 models accepted by guarded CPU-selection probes on each seed, with a flattened
 creation_choices CPU/language matrix. Accept project_name, path, cpu_model,

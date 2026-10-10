@@ -1,4 +1,4 @@
-//! Embedded, native blank projects; no runtime access to sibling fixtures.
+//! Compatibility creation profiles backed by the library project generator.
 use crate::storage::{StoreError, revision};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -71,23 +71,21 @@ pub fn select(
 }
 
 impl ProjectTemplate {
-    pub fn bytes(self) -> &'static [u8] {
-        match self {
-            Self::XgkLd => include_bytes!("../templates/xgk_ld.xgwx"),
-            Self::XgiLd => include_bytes!("../templates/xgi_ld.xgwx"),
-            Self::XgiSfc => include_bytes!("../templates/xgi_sfc.xgwx"),
-        }
-    }
     pub fn document(self) -> Result<XgwxDocument, StoreError> {
-        XgwxDocument::parse(self.bytes()).map_err(|e| StoreError::new("template_error", e))
+        let (cpu, language) = match self {
+            Self::XgkLd => ("XGK-CPUSN", "LD"),
+            Self::XgiLd => ("XGI-CPUE", "LD"),
+            Self::XgiSfc => ("XGI-CPUE", "SFC"),
+        };
+        xgwx::create_project(cpu, language).map_err(|e| StoreError::new("template_error", e))
     }
-    pub fn metadata(self) -> Value {
+    pub fn metadata(self) -> Result<Value, StoreError> {
         let id = match self {
             Self::XgkLd => "xgk_ld",
             Self::XgiLd => "xgi_ld",
             Self::XgiSfc => "xgi_sfc",
         };
-        json!({"id":id,"program_language":self.language(),"sha256":revision(self.bytes()),"project_name":"NewProject","plc_name":"LSPLC","program_name":"NewProgram","identity_policy":"preserve_native_template_identities"})
+        Ok(json!({"id":id,"program_language":self.language(),"sha256":revision(&self.document()?.to_verified_bytes().map_err(|e| StoreError::new("template_error", e))?),"project_name":"NewProject","plc_name":"LSPLC","program_name":"NewProgram","identity_policy":"preserve_library_default_identities","generator":"libxgwx"}))
     }
 }
 pub fn cpu_model(doc: &XgwxDocument) -> Option<&'static str> {
@@ -105,7 +103,7 @@ pub fn list() -> Result<Value, StoreError> {
         ProjectTemplate::XgiSfc,
     ] {
         let doc = template.document()?;
-        let mut item = template.metadata();
+        let mut item = template.metadata()?;
         item["default_cpu_model"] = json!(cpu_model(&doc));
         item["selectable_cpu_models"] = json!(
             xgwx::cpu_catalog()
@@ -117,6 +115,6 @@ pub fn list() -> Result<Value, StoreError> {
         items.push(item);
     }
     Ok(
-        json!({"templates":items,"creation_choices":items.iter().flat_map(|item| item["selectable_cpu_models"].as_array().unwrap().iter().map(|model| json!({"cpu_model":model,"program_language":item["program_language"],"template":item["id"]}))).collect::<Vec<_>>(),"limitations":"Internal template identities are preserved. Project and initial program names can be chosen at creation. Only LD and SFC blanks are currently supported. CPU selection follows existing library migration guards; supported models are probed against each blank template. Blank programs may report incomplete-program diagnostics. Local creation and verification do not establish native XG5000 acceptance."}),
+        json!({"templates":items,"creation_choices":items.iter().flat_map(|item| item["selectable_cpu_models"].as_array().unwrap().iter().map(|model| json!({"cpu_model":model,"program_language":item["program_language"],"template":item["id"]}))).collect::<Vec<_>>(),"limitations":"Library default identities are preserved. Project and initial program names can be chosen at creation. Only LD and SFC blanks are currently supported. CPU selection follows existing library migration guards; supported models are probed against each blank template. Blank programs may report incomplete-program diagnostics. Local creation and verification do not establish native XG5000 acceptance."}),
     )
 }

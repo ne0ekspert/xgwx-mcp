@@ -6,7 +6,7 @@ Local Rust stdio MCP server for inspecting and editing LS XG5000 `.xgwx` files t
 
 Keep this repository beside `libxgwx`; the dependency is `../libxgwx` with its `write` and `il` features enabled. Build with Rust 1.88 or newer:
 
-The tested library baseline is commit `913f14a`, with the public `rename_project`
+The tested library baseline is commit `91705f5`, with the public `rename_project`
 writer used by named-project creation. If that writer is absent, apply the bundled
 dependency patch from the library directory:
 
@@ -40,7 +40,7 @@ Configure a stdio MCP client using the binary's absolute path and arguments. An 
 | Tool | Purpose |
 | --- | --- |
 | `list_templates` | Discover native blank projects and supported CPU/language creation choices without an existing file. |
-| `create_file` | Create a verified new project from a template with optional initial edits; never overwrite an existing destination. |
+| `create_file` | Generate a verified new project through libxgwx with optional initial edits; never overwrite an existing destination. |
 | `list_modules` | List installed modules, settings and rack context. |
 | `list_module_catalog` | Search available models and writable options without a project file. |
 | `list_variables` | List globals and IEC locals, optionally selecting a program. |
@@ -122,13 +122,14 @@ optionally choose `program_name` and ordered initial `operations`:
 {"project_name":"Factory Line 1","path":"factory.xgwx","cpu_model":"XGI-CPUE","program_language":"SFC","program_name":"Main","dry_run":true}
 ```
 
-The server derives a native blank template from CPU/language. LD is available
+The server calls `libxgwx::create_project` for the selected creation profile.
+No template `.xgwx` file is read or embedded. LD is available
 for guarded XGK/XGI choices, SFC for guarded XGI choices; ST/IL and other CPU
 families are not currently available. The legacy `template` argument remains
 optional; conflicting template/language choices are rejected. Omitted names
 retain `NewProject`/`NewProgram`, and omitted CPU/language/template uses XGK LD.
 Parent directories must exist within allowed roots. Creation verifies the
 candidate and atomically saves without replacing existing files or symlinks.
-No backup is needed until a later edit. Internal seed identities are preserved.
+No backup is needed until a later edit. Library default identities are preserved.
 See the portable [creation workflow](skills/xgwx-edit/references/create-file.md)
 and [template provenance](templates/README.md).

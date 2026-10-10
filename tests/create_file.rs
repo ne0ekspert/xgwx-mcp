@@ -16,8 +16,7 @@ fn op(name: &str, args: Value) -> EditOperation {
     }
 }
 #[test]
-fn templates_are_bundled_native_inputs_and_cpu_discovery_is_guarded() {
-    let manifest: Value = serde_json::from_str(include_str!("../templates/manifest.json")).unwrap();
+fn library_generated_profiles_and_cpu_discovery_are_guarded() {
     let listed = templates::list().unwrap();
     assert_eq!(listed["templates"].as_array().unwrap().len(), 3);
     for (template, expected) in [
@@ -28,19 +27,9 @@ fn templates_are_bundled_native_inputs_and_cpu_discovery_is_guarded() {
         let doc = template.document().unwrap();
         assert_eq!(templates::cpu_model(&doc), Some(expected));
         doc.to_verified_bytes().unwrap();
-        let info = template.metadata();
-        let entry = manifest["templates"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|v| v["id"] == info["id"])
-            .unwrap();
-        assert_eq!(info["sha256"], entry["sha256"]);
-        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .join(entry["source"].as_str().unwrap());
-        assert_eq!(fs::read(source).unwrap(), template.bytes());
+        let info = template.metadata().unwrap();
+        assert_eq!(info["generator"], "libxgwx");
+        assert_eq!(info["sha256"], revision(&doc.to_verified_bytes().unwrap()));
         let entry = listed["templates"]
             .as_array()
             .unwrap()

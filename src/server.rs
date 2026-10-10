@@ -187,7 +187,7 @@ async fn blocking(
 #[tool_router]
 impl XgwxServer {
     #[tool(
-        description = "List bundled native blank project templates, their default names/CPU, source hashes and CPU models selectable under existing library guards. No project file is required.",
+        description = "List library-generated blank project profiles, their default names/CPU, generated hashes and CPU models selectable under existing library guards. No project file is required.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     fn list_templates(&self) -> CallToolResult {
@@ -195,7 +195,7 @@ impl XgwxServer {
     }
 
     #[tool(
-        description = "Create a new .xgwx project from a bundled native xgk_ld, xgi_ld or xgi_sfc blank template. Optionally select a supported CPU and apply ordered initial writer edits. Verify before atomic no-clobber creation; never overwrite an existing file, directory or symlink. Parent must exist within allowed roots. Choose project_name, path, cpu_model, program_language and optional program_name. Template is optional and derived from CPU/language. Discover creation_choices with list_templates. Internal seed identities are preserved. No original exists to back up. dry_run creates no files or sidecars; inspect the saved revision before further edits. Native acceptance remains separate.",
+        description = "Generate a new .xgwx project through libxgwx for an xgk_ld, xgi_ld or xgi_sfc creation profile. Optionally select a supported CPU and apply ordered initial writer edits. Verify before atomic no-clobber creation; never overwrite an existing file, directory or symlink. Parent must exist within allowed roots. Choose project_name, path, cpu_model, program_language and optional program_name. Template is optional and derived from CPU/language. Discover creation_choices with list_templates. Library default identities are preserved. No original exists to back up. dry_run creates no files or sidecars; inspect the saved revision before further edits. Native acceptance remains separate.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,

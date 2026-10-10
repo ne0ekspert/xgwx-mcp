@@ -263,7 +263,7 @@ impl FileStore {
             create_new_file(&path, &output)?;
         }
         Ok(
-            json!({"path":path,"created":!dry_run,"dry_run":dry_run,"revision_before":null,"revision_after":revision(&output),"backup_path":null,"template":template.metadata(),"cpu_model":crate::templates::cpu_model(&doc),"project_name":doc.project_name(),"program_name":doc.programs().first().and_then(|p| p.name.clone()),"program_language":template.language(),"results":results,"validation":validation}),
+            json!({"path":path,"created":!dry_run,"dry_run":dry_run,"revision_before":null,"revision_after":revision(&output),"backup_path":null,"template":template.metadata()?,"cpu_model":crate::templates::cpu_model(&doc),"project_name":doc.project_name(),"program_name":doc.programs().first().and_then(|p| p.name.clone()),"program_language":template.language(),"results":results,"validation":validation}),
         )
     }
 

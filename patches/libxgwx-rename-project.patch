@@ -37,19 +37,21 @@
      /// Update editable XML metadata for one program selected by document order.
 --- a/src/error.rs
 +++ b/src/error.rs
-@@ -203,6 +203,7 @@
+@@ -203,7 +203,8 @@
      BrowserHardwareEdit(String),
      BrowserNetworkEdit(String),
      SfcEdit(String),
+     TextProgramEdit(String),
 +    ProjectRename(String),
      ProgramCreation(String),
      ProgramDeletion(String),
      ProgramReorder(String),
-@@ -435,6 +436,7 @@
+@@ -436,7 +437,8 @@
              Self::BrowserHardwareEdit(reason) => write!(f, "hardware edit rejected: {reason}"),
              Self::ProgramDeletion(reason) => write!(f, "program deletion rejected: {reason}"),
              Self::ProgramReorder(reason) => write!(f, "program reorder rejected: {reason}"),
 +            Self::ProjectRename(reason) => write!(f, "project rename rejected: {reason}"),
              Self::ProgramCreation(reason) => write!(f, "program creation rejected: {reason}"),
+             Self::TextProgramEdit(reason) => write!(f, "text program edit rejected: {reason}"),
              Self::SfcEdit(reason) => write!(f, "SFC edit rejected: {reason}"),
              Self::BrowserNetworkEdit(reason) => write!(f, "network edit rejected: {reason}"),
