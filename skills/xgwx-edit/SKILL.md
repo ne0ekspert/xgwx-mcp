@@ -1,6 +1,6 @@
 ---
 name: xgwx-edit
-description: Inspect and edit local LS XG5000 .xgwx projects through the xgwx-mcp server, including programs, symbols, ladder, hardware, networks, and SFC charts.
+description: Inspect and edit local LS XG5000 .xgwx projects through the xgwx-mcp server, including programs, symbols, ladder, hardware, networks, SFC charts, and standalone ST/IL source programs.
 ---
 
 # XGWX editing
@@ -23,7 +23,7 @@ Use `validate_file(path)` to report container verification and available decoded
 
 ## New project files
 
-Use `list_templates()` then `create_file(path, project_name?, cpu_model?, program_language?, program_name?, operations?, dry_run?)` for a new `.xgwx` file. Read [create-file.md](references/create-file.md) first. Preview without disk changes; save only to an absent destination in an existing allowed directory. Choose the project name, destination, CPU and LD/SFC program language from advertised creation_choices; the seed is derived automatically. Unsupported combinations are rejected. Omitted names retain defaults; seed identities and CPU migration guards are preserved. Inspect the created revision before further edits; later changed edits create normal backups. `create_program` adds a program to an existing file.
+Use `list_templates()` then `create_file(path, project_name?, cpu_model?, program_language?, program_name?, operations?, dry_run?)` for a new `.xgwx` file. Read [create-file.md](references/create-file.md) first. Preview without disk changes; save only to an absent destination in an existing allowed directory. Choose the project name, destination, CPU and LD/SFC/ST/IL program language from advertised creation_choices; the seed is derived automatically. Unsupported combinations are rejected. Omitted names retain defaults; seed identities and CPU migration guards are preserved. Inspect the created revision before further edits; later changed edits create normal backups. `create_program` adds a program to an existing file.
 
 ## Focused discovery and property patches
 
@@ -53,3 +53,12 @@ For supported SFC linear row insertion/deletion/reordering and row fields, direc
 Distinguish container verification, decoded-program diagnostics, and native acceptance in the result. Some supported edits intentionally leave incomplete circuits or charts; successful serialization does not establish executable program validity.
 
 Native acceptance requires XG5000 Open → inspect the changed area → Check Program → Save As to a separate file → inspect/compare the resave. Record native errors/warnings and compare relevant decoded payloads/metadata plus unrelated retained sections. If this was not performed, say that native acceptance remains unverified. Do not infer acceptance from local parsing or IL generation. This skill does not authorize PLC communication, deployment, client configuration changes, or unrelated files.
+
+## Standalone ST/IL source
+
+Read [st-il.md](references/st-il.md) for ST/IL creation, source patches and
+advanced declarations. Inspect `text` with `program_index` for exact source,
+ObjectId, language, editability and declarations. Use `edit_text_program` or
+`get_ir` → `apply_patch` for source, and `edit_text_variable` for declarations.
+Preserve line endings, full expected values and declaration metadata; native
+syntax/type validation remains XG5000 Check Program.

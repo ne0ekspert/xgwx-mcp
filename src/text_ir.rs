@@ -173,6 +173,7 @@ pub struct Projection {
     iec_rows: Vec<xgwx::IecRowFrame>,
     isolated: BTreeSet<String>,
     sfc: Option<crate::sfc_ir::Projection>,
+    text_program: Option<xgwx::TextProgram>,
 }
 impl Projection {
     pub fn export(doc: &XgwxDocument, revision: &str, index: usize) -> Result<Self, StoreError> {
@@ -181,6 +182,43 @@ impl Projection {
             .into_iter()
             .nth(index)
             .ok_or_else(|| error("program_index is absent"))?;
+        if let Some(program) = doc
+            .text_programs()
+            .into_iter()
+            .find(|p| p.program_index == index)
+        {
+            let mut text = format!(
+                "xgwx-ir/1 revision {}\nprogram @p{} {} dialect {} object {}\n",
+                quote(revision),
+                index,
+                quote(summary.name.as_deref().unwrap_or("")),
+                program.language,
+                quote(&program.object_id)
+            );
+            text.push_str(&format!(
+                "readonly editable {} reason {}\n",
+                program.editable,
+                quote(program.reason.as_deref().unwrap_or(""))
+            ));
+            text.push_str("source {\n");
+            if let Some(source) = &program.source {
+                for line in source.split_inclusive('\n') {
+                    text.push_str(&format!("  source {}\n", quote(line)));
+                }
+            }
+            text.push_str("}\n");
+            let dialect = if program.language == "ST" { "ST" } else { "IL" };
+            return Ok(Self {
+                text,
+                dialect,
+                program_index: index,
+                sources: BTreeMap::new(),
+                iec_rows: vec![],
+                isolated: BTreeSet::new(),
+                sfc: None,
+                text_program: Some(program),
+            });
+        }
         if let Some(program) = doc
             .sfc_programs()
             .into_iter()
@@ -195,6 +233,7 @@ impl Projection {
                 iec_rows: vec![],
                 isolated: BTreeSet::new(),
                 sfc: Some(sfc),
+                text_program: None,
             });
         }
         let program = doc
@@ -653,10 +692,73 @@ impl Projection {
             iec_rows,
             isolated,
             sfc: None,
+            text_program: None,
         })
     }
 
     pub fn lower_patch(&self, patch: &str) -> Result<Vec<EditOperation>, StoreError> {
+        if let Some(program) = &self.text_program {
+            let edited = apply_unified_patch(&self.text, patch)?;
+            if edited == self.text {
+                return Ok(vec![]);
+            }
+            if !program.editable {
+                return Err(unsupported(
+                    program
+                        .reason
+                        .as_deref()
+                        .unwrap_or("unsupported source layout"),
+                ));
+            }
+            let parse_source = |text: &str| -> Result<(Vec<String>, String), StoreError> {
+                let mut frozen = vec![];
+                let mut source = String::new();
+                let mut in_source = false;
+                let mut seen = false;
+                for line in text.lines() {
+                    if line == "source {" {
+                        if seen {
+                            return Err(error("duplicate source block"));
+                        }
+                        seen = true;
+                        in_source = true;
+                        frozen.push(line.into());
+                    } else if line == "}" && in_source {
+                        in_source = false;
+                        frozen.push(line.into());
+                    } else if in_source {
+                        let value = line.strip_prefix("  source ").ok_or_else(|| {
+                            error("source lines must be quoted source statements")
+                        })?;
+                        source.push_str(&serde_json::from_str::<String>(value).map_err(error)?);
+                    } else {
+                        frozen.push(line.into());
+                    }
+                }
+                if !seen || in_source {
+                    return Err(error("missing or unterminated source block"));
+                }
+                Ok((frozen, source))
+            };
+            let (before, _) = parse_source(&self.text)?;
+            let (after, source) = parse_source(&edited)?;
+            if before != after {
+                return Err(unsupported(
+                    "ST/IL identities, language and readonly fields cannot change",
+                ));
+            }
+            let expected_source = program
+                .source
+                .as_ref()
+                .ok_or_else(|| unsupported("source is not decoded"))?;
+            if source == *expected_source {
+                return Ok(vec![]);
+            }
+            return Ok(vec![EditOperation {
+                name: "edit_text_program".into(),
+                args: json!({"patch":{"program_index":self.program_index,"expected_object_id":program.object_id,"expected_language":program.language,"expected_source":expected_source,"source":source}}),
+            }]);
+        }
         if let Some(sfc) = &self.sfc {
             return sfc.lower_patch(patch);
         }

@@ -22,6 +22,55 @@ fn parse_args<T: serde::de::DeserializeOwned>(name: &str, args: Value) -> Result
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+struct EditVendorIlArgs {
+    patch: VendorIlPatch,
+}
+fn schema_edit_vendor_il() -> Value {
+    serde_json::to_value(schema_for!(EditVendorIlArgs)).unwrap()
+}
+fn example_edit_vendor_il() -> Value {
+    json!({"patch":{"program_index":0,"expected_object_id":"<inspected ObjectId>","expected_source":"","source":"LOAD M00000\nOUT M00001"}})
+}
+fn apply_edit_vendor_il(doc: &mut XgwxDocument, args: Value) -> Result<(), String> {
+    let args: EditVendorIlArgs = parse_args("edit_vendor_il", args)?;
+    doc.edit_vendor_il(&args.patch.into())
+        .map_err(|e| e.to_string())
+}
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct EditTextProgramArgs {
+    patch: TextProgramPatch,
+}
+fn schema_edit_text_program() -> Value {
+    serde_json::to_value(schema_for!(EditTextProgramArgs)).unwrap()
+}
+fn example_edit_text_program() -> Value {
+    json!({"patch":{"program_index":0,"expected_object_id":"<inspected ObjectId>","expected_language":"ST","expected_source":"","source":"%MX0 := TRUE;\r\n"}})
+}
+fn apply_edit_text_program(doc: &mut XgwxDocument, args: Value) -> Result<(), String> {
+    let args: EditTextProgramArgs = parse_args("edit_text_program", args)?;
+    doc.edit_text_program(&args.patch.into())
+        .map_err(|e| e.to_string())
+}
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct EditTextVariableArgs {
+    expected_object_id: String,
+    patch: SfcVariablePatch,
+}
+fn schema_edit_text_variable() -> Value {
+    serde_json::to_value(schema_for!(EditTextVariableArgs)).unwrap()
+}
+fn example_edit_text_variable() -> Value {
+    json!({"expected_object_id":"<inspected ObjectId>","patch":{"program_index":0,"expected_variables":[],"name":"Run","data_type":"BOOL","description":"Run request","remove":false}})
+}
+fn apply_edit_text_variable(doc: &mut XgwxDocument, args: Value) -> Result<(), String> {
+    let args: EditTextVariableArgs = parse_args("edit_text_variable", args)?;
+    doc.edit_text_variable(&args.expected_object_id, &args.patch.into())
+        .map_err(|e| e.to_string())
+}
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct EditBrowserHardwareArgs {
     patch: BrowserHardwarePatch,
 }
@@ -4132,6 +4181,33 @@ fn execute_edit_sfc_variable(
 
 pub const OPERATIONS: &[OperationDefinition] = &[
     OperationDefinition {
+        name: "edit_vendor_il",
+        subsystem: "text_programs",
+        description: "Replace supported XGK IL by rebuilding native ladder records. Requires current ObjectId and exact exported IL. Rejects branch IL, Auto-allocation and unsupported topology; this replaces the whole selected ladder payload.",
+        adapter: "edit_vendor_il",
+        schema: schema_edit_vendor_il,
+        example: example_edit_vendor_il,
+        apply: apply_edit_vendor_il,
+    },
+    OperationDefinition {
+        name: "edit_text_program",
+        subsystem: "text_programs",
+        description: "Replace standalone ST or IEC IL source using exact identity, language and expected-source checks. Preserve unsupported-layout, UTF-16 length and NUL guards. Does not compile source.",
+        adapter: "edit_text_program",
+        schema: schema_edit_text_program,
+        example: example_edit_text_program,
+        apply: apply_edit_text_program,
+    },
+    OperationDefinition {
+        name: "edit_text_variable",
+        subsystem: "text_programs",
+        description: "Add, update or remove standalone ST/IL declarations using a complete expected-variable snapshot and program ObjectId. Preserve IEC type, mapped/system declaration and source-reference guards.",
+        adapter: "edit_text_variable",
+        schema: schema_edit_text_variable,
+        example: example_edit_text_variable,
+        apply: apply_edit_text_variable,
+    },
+    OperationDefinition {
         name: "edit_browser_hardware",
         subsystem: "hardware",
         description: "Apply one supported hardware field transactionally. The XML outside the\nexact selected attribute is compared byte for byte before commit.",
@@ -4161,7 +4237,7 @@ pub const OPERATIONS: &[OperationDefinition] = &[
     OperationDefinition {
         name: "select_cpu",
         subsystem: "hardware",
-        description: "Select the CPU model stored by the primary project configuration.\n\nThis updates the authoritative `<Configuration Type>` value while\npreserving the existing basic parameters, programs, hardware, and\nnetwork configuration. XGK changes require retained hardware to fit.\nCaptured XGI model changes support validated SFC projects with default\nparameters and empty I/O tables. Other model changes require\na migration and are rejected. Selecting the current type is a no-op.",
+        description: "Select the CPU model stored by the primary project configuration.\n\nThis updates the authoritative `<Configuration Type>` value while\npreserving the existing basic parameters, programs, hardware, and\nnetwork configuration. XGK changes require retained hardware to fit.\nCaptured XGI model changes support validated SFC, ST and IL projects with default\nparameters and empty I/O tables. Other model changes require\na migration and are rejected. Selecting the current type is a no-op.",
         adapter: "select_cpu",
         schema: schema_select_cpu,
         example: example_select_cpu,
@@ -5374,7 +5450,16 @@ fn operation_constraints(name: &str) -> Vec<&'static str> {
             "Names must be nonempty and unique ignoring case. Name/description may resize to at most 255 UTF-16 units and cannot contain control characters. Address-area and data-type text retain their existing UTF-16 length.",
         ],
         "create_program" => vec![
-            "patch.language is LD or SFC where supported by the selected CPU. object_id and symbol_id must be distinct fresh 36-character GUIDs; the program identifier must be unique ignoring case.",
+            "patch.language is LD, SFC, ST or IL where supported by the selected CPU. object_id and symbol_id must be distinct fresh 36-character GUIDs; the program identifier must be unique ignoring case.",
+        ],
+        "edit_vendor_il" => vec![
+            "XGK IL uses LOAD/AND/OUT and catalog application instructions, not IEC LD/ST. This rebuilds the selected ladder payload; comments/geometry not represented by IL are not retained. Reject unsupported branch topology and Auto-allocation. Copy exact exported source and ObjectId; inspect after replacement.",
+        ],
+        "edit_text_program" => vec![
+            "expected_language is ST or IL and must match inspection. Copy expected_source exactly, including line endings. Replacement is at most 65536 UTF-16 units and cannot contain NUL. Encryption and unsupported bookmark/breakpoint or source layouts remain read-only. Source decoding is not syntax/type checking.",
+        ],
+        "edit_text_variable" => vec![
+            "Copy expected_object_id and the complete expected_variables snapshot from text inspection, including system/declaration metadata. Existing IEC declaration type, mapping and reference restrictions apply.",
         ],
         "edit_sfc_entity" => vec![
             "patch.field is comment for a step (expected_type=0), or condition for an existing direct %MX BOOL transition (expected_type=1). Position, type and old field text must match exactly.",
@@ -5421,10 +5506,29 @@ fn verified_fixture_examples(name: &str) -> Vec<Value> {
 fn precise_inspection_requirements(name: &str) -> Vec<Value> {
     let req = |section: &str, fields: &[&str], purpose: &str| {
         json!({"section":section,
-        "program_index_required": section.starts_with("sfc.") || (section.starts_with("program") && section!="programs"),
+        "program_index_required": (section == "text" || section == "text.variables" || section == "vendor_il") || section.starts_with("sfc.") || (section.starts_with("program") && section!="programs"),
         "fields":fields,"purpose":purpose,"freshness":"Use one current file revision; re-inspect after structural edits."})
     };
     match name {
+        "edit_vendor_il" => vec![req(
+            "vendor_il",
+            &["program_index", "object_id", "source", "editable", "reason"],
+            "Read the selected XGK IL projection. Full payload replacement is allowed only for supported straight-line IL; do not route IEC IL through this writer.",
+        )],
+        "edit_text_program" | "edit_text_variable" => vec![req(
+            "text",
+            &[
+                "program_index",
+                "object_id",
+                "language",
+                "source",
+                "editable",
+                "reason",
+                "variables",
+                "variables_error",
+            ],
+            "Select a standalone ST/IL program. Copy the exact source and complete declaration snapshot; use the source-program identity, not an SFC block identity.",
+        )],
         "edit_sfc_entity" | "replace_sfc_sequence" => vec![req(
             "sfc.block.<block_index>",
             &[
@@ -5639,6 +5743,10 @@ pub fn describe_operation(name: &str) -> Result<Value, String> {
         "iec_ladder" => (
             "programs: IEC record frames, row/group coordinates, graph, function blocks/pins/operand links and available edit_sites",
             "IEC coordinates and offsets differ from XGK cells. Use current decoded records and supported edit sites; unsupported shapes remain guarded. Some operations deliberately allow incomplete circuits and require diagnostics afterwards.",
+        ),
+        "text_programs" => (
+            "text: program index, ObjectId, language, exact source, editability and complete declarations",
+            "Standalone ST/IEC IL use native UTF-16 source containers. Preserve exact expected values and advanced declaration metadata. Local decoding is not native syntax/type checking.",
         ),
         "sfc" => (
             "sfc: current entities, editable_rows, positions and expected_variables with declaration metadata",

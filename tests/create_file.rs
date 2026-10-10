@@ -18,7 +18,7 @@ fn op(name: &str, args: Value) -> EditOperation {
 #[test]
 fn library_generated_profiles_and_cpu_discovery_are_guarded() {
     let listed = templates::list().unwrap();
-    assert_eq!(listed["templates"].as_array().unwrap().len(), 3);
+    assert_eq!(listed["templates"].as_array().unwrap().len(), 6);
     for (template, expected) in [
         (ProjectTemplate::XgkLd, "XGK-CPUSN"),
         (ProjectTemplate::XgiLd, "XGI-CPUE"),

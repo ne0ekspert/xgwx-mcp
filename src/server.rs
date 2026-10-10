@@ -31,7 +31,7 @@ impl XgwxServer {
 pub struct InspectRequest {
     /// File path, absolute or relative to the server startup directory.
     pub path: String,
-    /// overview, programs, program, symbols, hardware, networks, sfc, sfc.variables,
+    /// overview, programs, program, symbols, hardware, networks, sfc, text, text.variables, vendor_il, sfc.variables,
     /// sfc.block.<numeric block index>, program.edit_sites,
     /// program.rows, program.records, program.functions, program.references,
     /// program.operand_links, program.graph, program.strings, program.cells, catalog.cpu, catalog.modules,
@@ -87,7 +87,7 @@ pub struct ApplyRequest {
 #[serde(deny_unknown_fields)]
 pub struct IrRequest {
     pub path: String,
-    /// Document-order ladder or SFC program index. SFC exports selected charts and local declarations.
+    /// Document-order ladder, SFC or standalone ST/IL program index. SFC exports selected charts and local declarations.
     pub program_index: Option<usize>,
     /// program (default), modules, variables or networks. Subsystem exports mark edit/readonly properties.
     #[serde(default = "program_section")]
@@ -195,7 +195,7 @@ impl XgwxServer {
     }
 
     #[tool(
-        description = "Generate a new .xgwx project through libxgwx for an xgk_ld, xgi_ld or xgi_sfc creation profile. Optionally select a supported CPU and apply ordered initial writer edits. Verify before atomic no-clobber creation; never overwrite an existing file, directory or symlink. Parent must exist within allowed roots. Choose project_name, path, cpu_model, program_language and optional program_name. Template is optional and derived from CPU/language. Discover creation_choices with list_templates. Library default identities are preserved. No original exists to back up. dry_run creates no files or sidecars; inspect the saved revision before further edits. Native acceptance remains separate.",
+        description = "Generate a new .xgwx project through libxgwx for an xgk_ld, xgi_ld, xgi_sfc, xgi_st or xgi_il creation profile. Optionally select a supported CPU and apply ordered initial writer edits. Verify before atomic no-clobber creation; never overwrite an existing file, directory or symlink. Parent must exist within allowed roots. Choose project_name, path, cpu_model, program_language and optional program_name. Template is optional and derived from CPU/language. Discover creation_choices with list_templates. Library default identities are preserved. No original exists to back up. dry_run creates no files or sidecars; inspect the saved revision before further edits. Native acceptance remains separate.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -300,7 +300,7 @@ impl XgwxServer {
         .await
     }
     #[tool(
-        description = "List global and IEC program-local variables with names, types, addresses, descriptions and revision-scoped indices. Optional program_index selects one local table; globals remain included. SFC declarations remain in inspect_file section sfc.variables. Pagination applies independently to tables.",
+        description = "List global and IEC program-local variables with names, types, addresses, descriptions and revision-scoped indices. Optional program_index selects one local table; globals remain included. SFC declarations remain in inspect_file section sfc.variables; ST/IL declarations use text.variables. Pagination applies independently to tables.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_variables(
@@ -371,7 +371,7 @@ impl XgwxServer {
     }
 
     #[tool(
-        description = "Export revision-scoped text. section modules/variables/networks provides property documents with edit/readonly fields; section program requires program_index and exports an XGK/IEC ladder or SFC program. Includes contacts, coils, native rung/output comments, symbol descriptions, catalog XGK instructions, bound IEC function operands and captured arithmetic/comparison names, native coordinates, physical wires and read-only derived circuit connections. Use an exact unified diff with apply_patch. Positions and identities are scoped to this revision.",
+        description = "Export revision-scoped text. section modules/variables/networks provides property documents with edit/readonly fields; section program requires program_index and exports an XGK/IEC ladder, SFC or standalone ST/IL program. Includes contacts, coils, native rung/output comments, symbol descriptions, catalog XGK instructions, bound IEC function operands and captured arithmetic/comparison names, native coordinates, physical wires and read-only derived circuit connections. Use an exact unified diff with apply_patch. Positions and identities are scoped to this revision.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_ir(&self, Parameters(request): Parameters<IrRequest>) -> CallToolResult {
@@ -391,16 +391,18 @@ impl XgwxServer {
             }
             if ir.dialect == "IEC" { capabilities.extend(["iec_empty_row_element_creation", "iec_terminal_coil_creation", "iec_isolated_element_deletion", "iec_connected_contact_and_terminal_coil_deletion", "physical_wire_deletion", "vertical_wire_creation", "iec_function_operand_edit", "iec_arithmetic_and_comparison_name_edit"]); }
             if ir.dialect == "SFC" { capabilities = vec!["sfc_existing_row_fields", "sfc_linear_row_creation_deletion_reordering", "sfc_direct_entity_comment_and_condition", "sfc_declaration_descriptions"]; }
+            if ir.dialect == "ST" || ir.dialect == "IL" { capabilities = vec!["standalone_source_replacement"]; }
+            let text_limitations = "Only quoted source statements inside the source block can change. Their concatenation is the exact native source, including line endings. Use edit_text_variable for declarations. Source is limited to 65536 UTF-16 units without NUL; unsupported encryption/layout/metadata remains read-only. Local decoding is not syntax/type checking; use XG5000 Check Program and Save As for native acceptance.";
             let sfc_limitations = "SFC row changes use one complete chart snapshot and must be the only writer operation. Linear chart rows can be created, deleted and reordered; new rows require @new- identities and position none/branch_end none. Retained row kind and coordinates, positioned branch order/structure, chart/entity identities and declaration name/type/advanced metadata are read-only. Unsupported charts expose only guarded step-comment/direct %MX transition fields. Native entity, qualifier, TIME, ST-source and declaration constraints remain authoritative. Re-export after chart replacement; native XG5000 acceptance remains separate.";
             Ok(json!({"path":path,"revision":revision,"program_index":program_index,
                 "format":"xgwx-ir/1","dialect":ir.dialect,"text":ir.text,
                 "capabilities":capabilities,
-                "limitations":if ir.dialect == "SFC" {sfc_limitations} else {"Existing positions, derived connections, unknown instruction records, function signatures/pin bindings and opaque records are read-only. IEC function names can change only within captured arithmetic/comparison families; bound operand values retain native type/writability checks and cannot be empty. Physical wires can be deleted and supported vertical wires created with fresh @new- identities. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation in a patch; re-export afterward. Existing writer preconditions still apply. Native XG5000 acceptance remains separate."}}))
+                "limitations":if ir.dialect == "ST" || ir.dialect == "IL" {text_limitations} else if ir.dialect == "SFC" {sfc_limitations} else {"Existing positions, derived connections, unknown instruction records, function signatures/pin bindings and opaque records are read-only. IEC function names can change only within captured arithmetic/comparison families; bound operand values retain native type/writability checks and cannot be empty. Physical wires can be deleted and supported vertical wires created with fresh @new- identities. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation in a patch; re-export afterward. Existing writer preconditions still apply. Native XG5000 acceptance remains separate."}}))
         }).await
     }
 
     #[tool(
-        description = "Apply an exact unified diff to text from get_ir using the same section/program_index. Property documents support module comments/options, global variable metadata, guarded IEC local names/types/descriptions, network names/module metadata and Cnet/FEnet settings. Structural property objects and readonly fields cannot change. IEC local rename/type changes require one mutation. Compile supported semantic changes into guarded writers and save as one verified transaction with a backup. Supports SFC linear row creation/deletion/reordering and existing row fields, guarded direct entity comments/conditions and declaration descriptions, plus XGK cell and catalog instruction/comparison creation/deletion, instruction mnemonic/operand edits, IEC empty-row element creation, terminal-coil creation, isolated/connected-contact and terminal-coil deletion, physical-wire deletion and vertical-wire creation, contact/coil kind/operand edits, bound IEC function operands and captured arithmetic/comparison names, existing comment text, symbol descriptions, and XGK comment creation/rung comment deletion. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation; re-export afterward. SFC row changes target one chart and must be the only writer operation. Rejects unsupported moves and derived topology edits. Empty patch is a no-op. dry_run performs no disk changes.",
+        description = "Apply an exact unified diff to text from get_ir using the same section/program_index. Property documents support module comments/options, global variable metadata, guarded IEC local names/types/descriptions, network names/module metadata and Cnet/FEnet settings. Structural property objects and readonly fields cannot change. IEC local rename/type changes require one mutation. Compile supported semantic changes into guarded writers and save as one verified transaction with a backup. Supports standalone ST/IL source replacement with exact identity/language/source guards, SFC linear row creation/deletion/reordering and existing row fields, guarded direct entity comments/conditions and declaration descriptions, plus XGK cell and catalog instruction/comparison creation/deletion, instruction mnemonic/operand edits, IEC empty-row element creation, terminal-coil creation, isolated/connected-contact and terminal-coil deletion, physical-wire deletion and vertical-wire creation, contact/coil kind/operand edits, bound IEC function operands and captured arithmetic/comparison names, existing comment text, symbol descriptions, and XGK comment creation/rung comment deletion. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation; re-export afterward. SFC row changes target one chart and must be the only writer operation. Rejects unsupported moves and derived topology edits. Empty patch is a no-op. dry_run performs no disk changes.",
         annotations(
             read_only_hint = false,
             destructive_hint = true,

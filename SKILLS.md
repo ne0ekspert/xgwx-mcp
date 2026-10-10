@@ -44,7 +44,7 @@ Adapt these snippets to the client's supported configuration. This repository do
 ## Create a new project
 
 Call `list_templates` without a file path to discover native `xgk_ld`, `xgi_ld`
-and `xgi_sfc` seeds and supported CPU/language `creation_choices`. Then preview and save:
+`xgi_sfc`, `xgi_st` and `xgi_il` seeds and supported CPU/language `creation_choices`. Then preview and save:
 
 ```json
 {"project_name":"Machine Control","path":"/path/to/projects/machine.xgwx","cpu_model":"XGK-CPUH","program_language":"LD","program_name":"Main","dry_run":true}
@@ -54,7 +54,7 @@ Repeat with `dry_run:false` to create the verified file. The parent must exist
 inside an allowed root, and the destination must be absent; creation never
 overwrites files, directories or symlinks. Optional ordered `operations` can
 rename program 0 or populate its blank ladder through the existing writers.
-Choose project_name and optional program_name directly; CPU/language selects the blank automatically. Only advertised LD/SFC combinations are supported. Omitted names retain native defaults; internal seed identities and PLC defaults are retained.
+Choose project_name and optional program_name directly; CPU/language selects the blank automatically. Only advertised LD/SFC/ST/IL combinations are supported. Omitted names retain native defaults; internal seed identities and PLC defaults are retained.
 Creation returns `revision_after`, validation and results, with no original or
 backup. Inspect the saved file before preparing further edits; subsequent changed
 edits create backups normally. Read the portable
@@ -160,3 +160,13 @@ The installable skill contains focused guidance and example requests:
 - [SFC](skills/xgwx-edit/references/sfc.md): entity changes, complete chart snapshots, branches/actions, and declarations.
 
 For native acceptance, open the generated project in XG5000, inspect the changed area, run Check Program, Save As to a separate file, then inspect/compare that resave. Record errors and warnings and check retained program payloads and unrelated metadata. Local round-trip verification is a separate result; never label it native XG5000 acceptance. No PLC download or execution is part of this workflow.
+
+## ST/IL source programs
+
+Use `create_file(program_language:"ST"|"IL")` for supported XGI CPU choices.
+Inspect `text` with the selected `program_index`; discover schemas for
+`edit_text_program` and `edit_text_variable`. Source edits retain ObjectId,
+language and exact expected-source checks. Declarations require a complete
+expected_variables snapshot. `get_ir`/`apply_patch` supports quoted source lines
+with exact newline preservation. Read the [ST/IL reference](skills/xgwx-edit/references/st-il.md)
+for examples and constraints. `validate_file` reports decoding, not source compilation.

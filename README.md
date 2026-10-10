@@ -14,10 +14,10 @@ dependency patch from the library directory:
 git apply ../xgwx-mcp/patches/libxgwx-rename-project.patch
 ```
 
-This server tracks 120 public writers in its coverage manifest. An older library
+This server tracks 123 public writers in its coverage manifest. An older library
 may not build; newer public writers need corresponding server adapters before
-the full coverage audit passes. The baseline does not include the newer local
-standalone ST/IL editing writers.
+the full coverage audit passes. The baseline includes standalone ST/IL and XGK
+IL writers, plus the `create_project` generator and native defaults.
 
 ```bash
 cd /home/ne0ekspert/xgwx-mcp
@@ -124,8 +124,8 @@ optionally choose `program_name` and ordered initial `operations`:
 
 The server calls `libxgwx::create_project` for the selected creation profile.
 No template `.xgwx` file is read or embedded. LD is available
-for guarded XGK/XGI choices, SFC for guarded XGI choices; ST/IL and other CPU
-families are not currently available. The legacy `template` argument remains
+for guarded XGK/XGI choices, SFC, ST and IL for guarded XGI choices. Other CPU families require captured
+templates and are not currently available. The legacy `template` argument remains
 optional; conflicting template/language choices are rejected. Omitted names
 retain `NewProject`/`NewProgram`, and omitted CPU/language/template uses XGK LD.
 Parent directories must exist within allowed roots. Creation verifies the
@@ -133,3 +133,20 @@ candidate and atomically saves without replacing existing files or symlinks.
 No backup is needed until a later edit. Library default identities are preserved.
 See the portable [creation workflow](skills/xgwx-edit/references/create-file.md)
 and [template provenance](templates/README.md).
+
+## Standalone ST and IEC IL
+
+Create ST/IL projects with `create_file(program_language:"ST"|"IL")`, or add
+programs through `create_program`. Discover supported CPU/language choices with
+`list_templates`. Inspect `section:"text"` (optionally selecting `program_index`)
+or `section:"text.variables"` for source, ObjectId, editability and declarations.
+`edit_text_program` replaces source with identity, language and expected-source
+checks; `edit_text_variable` adds/updates/removes declarations with a complete
+expected snapshot. `get_ir` and `apply_patch` support quoted source-line diffs.
+See the [ST/IL workflow](skills/xgwx-edit/references/st-il.md).
+
+Source round trips preserve Unicode and line endings. Unsupported encrypted or
+metadata-bearing layouts remain read-only. Local validation reports decoding and
+container checks; syntax/type compilation requires native XG5000 Check Program.
+
+XGK IL uses `edit_vendor_il` and `inspect_file(section:"vendor_il")`; it rebuilds the selected ladder payload and retains guarded straight-line/catalog limits. Its creation profile is `xgk_il` with native LD storage.

@@ -1,7 +1,7 @@
 {
   "format_version": 1,
   "source_crate": "../libxgwx",
-  "public_mutator_count": 120,
+  "public_mutator_count": 123,
   "excluded_helpers": [
     "to_bytes",
     "to_verified_bytes",
@@ -986,6 +986,30 @@
       "operation": "rename_project",
       "adapter": "rename_project",
       "subsystem": "programs",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_text_program",
+      "source": "src/text_program.rs",
+      "operation": "edit_text_program",
+      "adapter": "edit_text_program",
+      "subsystem": "text_programs",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_text_variable",
+      "source": "src/text_program.rs",
+      "operation": "edit_text_variable",
+      "adapter": "edit_text_variable",
+      "subsystem": "text_programs",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_vendor_il",
+      "source": "src/vendor_il.rs",
+      "operation": "edit_vendor_il",
+      "adapter": "edit_vendor_il",
+      "subsystem": "text_programs",
       "compatibility_defaults": {}
     }
   ]

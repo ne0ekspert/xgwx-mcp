@@ -85,18 +85,16 @@ SFC text export detects native SFC XML before ladder decoding. Supported charts 
 
 ## Project-file creation
 
-Generate XGK LD and XGI LD/SFC creation profiles through libxgwx::create_project;
-source paths/hashes for library defaults are recorded in
-libxgwx/src/project_defaults/manifest.json. Do not accept arbitrary
+Generate XGK LD/vendor IL and XGI LD/SFC/ST/IL creation profiles through libxgwx::create_project; source paths/hashes for library defaults
+are recorded in libxgwx/src/project_defaults/manifest.json. Do not accept arbitrary
 client template paths or read/embed template .xgwx files for creation. Preserve native
 library default identities and unselected defaults rather than inventing undocumented GUID,
 parameter or cache rewriting. list_templates reports default names/model and
 models accepted by guarded CPU-selection probes on each seed, with a flattened
 creation_choices CPU/language matrix. Accept project_name, path, cpu_model,
-program_language (LD/SFC), and optional program_name directly. Derive the seed
+program_language (LD/SFC/ST/IL), and optional program_name directly. Derive the seed
 from the CPU family and language when template is absent; retain legacy template
-requests and reject conflicts. ST/IL and families without captured native blanks
-remain unsupported. Rename the project through the public rename_project writer
+requests and reject conflicts. Families without supported captured templates remain unsupported. Rename the project through the public rename_project writer
 with an expected-name guard and exact XML text replacement, preserving all other
 metadata/payloads. Project/program names must be nonblank with no control characters;
 Unicode and XML escaping are supported. Default omissions retain native names;
@@ -143,3 +141,28 @@ verified serialization, backups, roots, revision checks and atomic replacement.
 Tests must cover focused tool discovery/pagination, real stdio property export,
 preview/save/stale rejection, representative writer success and unrelated payload
 preservation, readonly/identity/shape/type restrictions, failure rollback and no-op.
+
+
+## Standalone source programs
+
+Expose all public text writers (`edit_text_program`, `edit_text_variable`, `edit_vendor_il`) with
+strict snake_case DTOs and coverage entries. Inspect source programs separately
+from ladder/SFC using text/text.variables, including exact source, program index,
+ObjectId, language, editability/reason and complete advanced declarations. Program
+inspection must recognize ST/IL before attempting ladder decoding. Validation
+reports decoded source and UTF-16 length, with syntax/type status not_checked.
+
+ST/IL create_file profiles use the public library project generator and native
+defaults. Record generated hashes and library default provenance. Advertise only CPU choices accepted by the existing select_cpu
+guards. Existing create_program accepts ST/IL on supported IEC profiles.
+
+For program IR, export quoted source chunks preserving native newlines, plus
+revision/identity/language/read-only metadata. Exact unified diffs may alter only
+source statements inside the source block; concatenate their decoded strings and
+lower to edit_text_program with the current ObjectId, language and source checks.
+Declarations use edit_text_variable and full expected-variable snapshots. Preserve
+native encryption/layout/metadata restrictions, NUL prohibition, 65536 UTF-16 unit
+limit and declaration/reference guards. Reuse normal atomic transaction, revision,
+dry-run and backup behavior. Do not treat source serialization as compilation.
+
+XGK vendor IL inspection uses vendor_il; edit_vendor_il rebuilds the selected native ladder payload, retaining identity/source and straight-line/catalog restrictions. Advertise xgk_il as IL with native LD storage.

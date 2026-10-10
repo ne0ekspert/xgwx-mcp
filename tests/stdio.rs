@@ -82,7 +82,7 @@ async fn real_stdio_inspection_schema_dry_run_edit_and_validation() {
         .unwrap()
         .structured_content
         .unwrap();
-    assert_eq!(catalog["count"], 120);
+    assert_eq!(catalog["count"], 123);
     let schema = client
         .call_tool(call("describe_operation", json!({"name":"update_program"})))
         .await
@@ -1008,7 +1008,7 @@ async fn real_stdio_template_discovery_create_preview_save_and_first_edit() {
             .as_array()
             .unwrap()
             .len(),
-        3
+        6
     );
     assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
     for template in ["xgk_ld", "xgi_ld", "xgi_sfc"] {
@@ -1084,7 +1084,7 @@ async fn real_stdio_template_discovery_create_preview_save_and_first_edit() {
         .unwrap();
     assert_eq!(bad.is_error, Some(true));
     assert!(!dir.path().join("bad.xgwx").exists());
-    for (language, cpu) in [("ST", "XGI-CPUE"), ("SFC", "XGK-CPUH")] {
+    for (language, cpu) in [("ST", "XGK-CPUH"), ("SFC", "XGK-CPUH")] {
         let invalid = client.call_tool(call("create_file", json!({"path":"invalid-choice.xgwx","project_name":"Factory","cpu_model":cpu,"program_language":language}))).await.unwrap();
         assert_eq!(invalid.is_error, Some(true));
         assert!(!dir.path().join("invalid-choice.xgwx").exists());

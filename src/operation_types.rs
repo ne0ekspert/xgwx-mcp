@@ -1013,3 +1013,44 @@ impl From<xgwx::LadderEditElement> for LadderEditElement {
         }
     }
 }
+
+/// Guarded standalone ST/IL source replacement; protocol fields remain snake_case.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct TextProgramPatch {
+    pub program_index: usize,
+    pub expected_object_id: String,
+    pub expected_language: String,
+    pub expected_source: String,
+    pub source: String,
+}
+impl From<TextProgramPatch> for xgwx::TextProgramPatch {
+    fn from(value: TextProgramPatch) -> Self {
+        Self {
+            program_index: value.program_index,
+            expected_object_id: value.expected_object_id,
+            expected_language: value.expected_language,
+            expected_source: value.expected_source,
+            source: value.source,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct VendorIlPatch {
+    pub program_index: usize,
+    pub expected_object_id: String,
+    pub expected_source: String,
+    pub source: String,
+}
+impl From<VendorIlPatch> for xgwx::VendorIlPatch {
+    fn from(value: VendorIlPatch) -> Self {
+        Self {
+            program_index: value.program_index,
+            expected_object_id: value.expected_object_id,
+            expected_source: value.expected_source,
+            source: value.source,
+        }
+    }
+}

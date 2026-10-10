@@ -11,6 +11,9 @@ pub const SECTIONS: &[&str] = &[
     "hardware",
     "networks",
     "sfc",
+    "text",
+    "vendor_il",
+    "text.variables",
     "program.rows",
     "program.records",
     "program.functions",
@@ -195,7 +198,7 @@ fn symbols(doc: &XgwxDocument, program_index: Option<usize>, offset: usize, limi
     json!({"global": globals, "local": page(&locals,
         if program_index.is_some() { 0 } else { offset }, limit, Clone::clone),
         "system_bool_names": IEC_SYSTEM_BOOL_VARIABLES,
-        "note": "Local symbol record_offset and identity are revision-specific. SFC declarations are in the sfc section."})
+        "note": "Local symbol record_offset and identity are revision-specific. SFC declarations are in the sfc section; standalone ST/IL declarations with full snapshots are in text.variables."})
 }
 
 fn hardware(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
@@ -602,6 +605,12 @@ fn program_details(
     }
 }
 
+fn text_program(value: &TextProgram, offset: usize, limit: usize) -> Value {
+    let mut result = fields!(value; program_index, object_id, language, source, editable, reason, variables_error);
+    result["variables"] = page(&value.variables, offset, limit, sfc_variable);
+    result
+}
+
 fn sfc_row(value: &SfcRow) -> Value {
     json!(crate::operation_types::SfcRow::from(value.clone()))
 }
@@ -670,7 +679,7 @@ pub fn inspect(
                 "container": {"xml_length": doc.xml.len(), "main_gzip_length": doc.main_gzip.len(),
                     "trailer_length": doc.trailer.len(), "trailer_gzip_members": doc.trailer_gzip_members.len()},
                 "counts": {"programs": doc.programs().len(), "tasks": doc.tasks().len(),
-                    "modules": doc.modules().len(), "networks": doc.networks().len(), "sfc_programs": doc.sfc_programs().len()},
+                    "modules": doc.modules().len(), "networks": doc.networks().len(), "sfc_programs": doc.sfc_programs().len(), "text_programs":doc.text_programs().len()},
                 "configurations": page(&doc.configurations(), offset, limit, configuration),
                 "programs": indexed_page(&doc.programs(), offset, limit, program_summary),
                 "sections": SECTIONS,
@@ -691,6 +700,47 @@ pub fn inspect(
         "symbols" => symbols(doc, program_index, offset, limit),
         "hardware" => hardware(doc, offset, limit),
         "networks" => networks(doc, offset, limit),
+        "vendor_il" => {
+            let programs = doc
+                .vendor_il_programs()
+                .into_iter()
+                .filter(|p| program_index.is_none_or(|i| i == p.program_index))
+                .collect::<Vec<_>>();
+            if program_index.is_some() && programs.is_empty() {
+                return Err("selected program has no XGK IL projection".into());
+            }
+            page(
+                &programs,
+                if program_index.is_some() { 0 } else { offset },
+                limit,
+                |p| fields!(p; program_index,object_id,source,editable,reason),
+            )
+        }
+        "text" => {
+            let programs = doc
+                .text_programs()
+                .into_iter()
+                .filter(|p| program_index.is_none_or(|i| i == p.program_index))
+                .collect::<Vec<_>>();
+            if program_index.is_some() && programs.is_empty() {
+                return Err("selected program is not standalone ST/IL".into());
+            }
+            page(
+                &programs,
+                if program_index.is_some() { 0 } else { offset },
+                limit,
+                |p| text_program(p, offset, limit),
+            )
+        }
+        "text.variables" => {
+            let index = program_index.ok_or("program_index is required for text.variables")?;
+            let program = doc
+                .text_programs()
+                .into_iter()
+                .find(|p| p.program_index == index)
+                .ok_or("selected program is not standalone ST/IL")?;
+            text_program(&program, offset, limit)
+        }
         "sfc" => sfc(doc, program_index, offset, limit),
         "sfc.variables" => {
             let index = program_index.ok_or("program_index is required for sfc.variables")?;
@@ -740,6 +790,18 @@ pub fn inspect(
             let index =
                 program_index.ok_or("program_index is required for program detail sections")?;
             let summary = program_summary(index, &doc.programs()[index]);
+            if let Some(program) = doc
+                .text_programs()
+                .into_iter()
+                .find(|p| p.program_index == index)
+            {
+                if section != "program" {
+                    return Err("ladder detail sections do not apply to ST/IL; inspect text or text.variables".into());
+                }
+                return Ok(
+                    json!({"program":summary,"details":text_program(&program,offset,limit)}),
+                );
+            }
             match doc.ladder_program(index) {
                 Some(Ok(program)) => {
                     json!({"program": summary, "details": program_details(&program, section, offset, limit)})
@@ -770,7 +832,15 @@ pub fn validate(doc: &XgwxDocument) -> Value {
         Err(error) => json!({"status": "verification_error", "error": error.to_string()}),
     };
     let sfc = doc.sfc_programs();
+    let texts = doc.text_programs();
     let programs = doc.programs().iter().enumerate().map(|(index, summary)| {
+        if let Some(program) = texts.iter().find(|p|p.program_index == index) {
+            return json!({"program_index":index,"name":summary.name,"format":program.language.to_lowercase(),
+                "status":if program.source.is_some() {"decoded"} else {"decode_error"},"editable":program.editable,
+                "reason":program.reason,"variables_error":program.variables_error,
+                "utf16_units":program.source.as_ref().map(|s|s.encode_utf16().count()),
+                "syntax_and_types":{"status":"not_checked","required_tool":"XG5000 Check Program"}});
+        }
         if let Some(program) = sfc.iter().find(|sfc| sfc.program_index == index) {
             return json!({"program_index": index, "name": summary.name, "format": "sfc",
                 "status": "decoded", "variables_error": program.variables_error,

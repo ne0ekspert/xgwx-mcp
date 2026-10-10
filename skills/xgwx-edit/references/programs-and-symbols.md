@@ -5,7 +5,7 @@ Inspect `programs` for document-order `program_index`, object identities, langua
 ## Program lifecycle
 
 - `update_program` accepts `program_index` and `patch` for editable metadata. Omitted patch fields remain unchanged.
-- `create_program` accepts `patch` with `name`, `language`, `object_id`, and `symbol_id`. Supply fresh GUIDs and a unique identifier name. The library appends a captured blank program and binds it to an existing scan task. XGK supports LD; supported XGI profiles support LD and captured SFC creation. Discover exact accepted language strings and CPU constraints in the operation schema/description.
+- `create_program` accepts `patch` with `name`, `language`, `object_id`, and `symbol_id`. Supply fresh GUIDs and a unique identifier name. The library appends a captured blank program and binds it to an existing scan task. XGK supports LD; supported XGI profiles support LD, SFC, ST and IEC IL creation. Discover exact accepted language strings and CPU constraints in the operation schema/description.
 - `delete_program` requires `program_index` and `expected_object_id`. It removes the selected top-level program and its local declarations; use the inspected identity.
 - `move_program` uses `from`, `to`, `expected_object_id`, and `expected_target_id`. `to` is the final program-list index. Reordering retains task assignments; list order affects execution within a task, while task scheduling remains independent.
 

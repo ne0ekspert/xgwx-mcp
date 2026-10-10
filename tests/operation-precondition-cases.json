@@ -769,5 +769,33 @@
   "rename_project": {
     "expected_name": "stale project name",
     "name": "Machine"
+  },
+  "edit_text_program": {
+    "patch": {
+      "program_index": 0,
+      "expected_object_id": "stale",
+      "expected_language": "ST",
+      "expected_source": "",
+      "source": "%MX0 := TRUE;"
+    }
+  },
+  "edit_text_variable": {
+    "expected_object_id": "stale",
+    "patch": {
+      "program_index": 0,
+      "expected_variables": [],
+      "name": "Run",
+      "data_type": "BOOL",
+      "description": "",
+      "remove": false
+    }
+  },
+  "edit_vendor_il": {
+    "patch": {
+      "program_index": 0,
+      "expected_object_id": "stale",
+      "expected_source": "",
+      "source": "LOAD M00000\nOUT M00001"
+    }
   }
 }

@@ -27,9 +27,10 @@ and program language. The server chooses the native blank template:
 All fields other than `path` are optional for backward compatibility. Omitted
 names retain native defaults. With no CPU/language/template, creation uses XGK LD.
 With SFC and no CPU, it uses the XGI SFC default. CPU models are case-insensitive.
-`program_language` accepts `LD` or `SFC`; currently supported choices are XGK LD,
-XGI IEC LD and XGI SFC under the advertised CPU guards. ST/IL and other families
-have no supported blank here; never claim the full native XG5000 language matrix.
+`program_language` accepts `LD`, `SFC`, `ST` or `IL`; supported profiles include
+XGK LD/vendor IL and XGI LD/SFC/ST/IEC IL under advertised CPU guards. XGK IL
+uses native ladder storage. Discover creation_choices instead of assuming the
+full native XG5000 language matrix.
 Project/program names must be nonblank and contain no control characters; Unicode,
 spaces and XML-special characters are safely encoded. `project_name` is stored
 inside the project independently of the destination filename. An optional legacy
@@ -68,3 +69,5 @@ PLC.
 
 To rename an existing project, discover `rename_project` and provide its inspected
 `expected_name` together with the new `name` in `apply_edits`.
+
+ST/IL seeds are library-derived blanks. Read [st-il.md](st-il.md) to populate source and declarations after creation.

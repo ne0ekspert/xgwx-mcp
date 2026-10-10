@@ -557,6 +557,127 @@
         "sfc_step_comment": "Fixture chart comment"
       },
       "fixture_sha256": "361ae4082c2e7b73d2af06e0688fb1ccac83ac53cff0e43c17bd2a012cc58c3e"
+    },
+    {
+      "id": "standalone-st",
+      "fixture": "empty-projects/new-xgi.xgwx",
+      "fixture_sha256": "d738e4625a838d8a1954b50512fddbcb0fa40e89b56ac04fa9d9a593745d63c7",
+      "preserve_programs": [
+        0
+      ],
+      "setup": [
+        {
+          "name": "create_program",
+          "args": {
+            "patch": {
+              "name": "TextProgram",
+              "language": "ST",
+              "object_id": "f16b3401-579a-4c20-a120-028379000001",
+              "symbol_id": "f16b3402-579a-4c20-a120-028379000002"
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "name": "edit_text_variable",
+          "args": {
+            "expected_object_id": "f16b3401-579a-4c20-a120-028379000001",
+            "patch": {
+              "program_index": 1,
+              "expected_variables": [],
+              "name": "Run",
+              "data_type": "BOOL",
+              "description": "Run request",
+              "remove": false
+            }
+          }
+        },
+        {
+          "name": "edit_text_program",
+          "args": {
+            "patch": {
+              "program_index": 1,
+              "expected_object_id": "f16b3401-579a-4c20-a120-028379000001",
+              "expected_language": "ST",
+              "expected_source": "",
+              "source": "Run := TRUE;\r\n"
+            }
+          }
+        }
+      ],
+      "expect": {}
+    },
+    {
+      "id": "standalone-il",
+      "fixture": "empty-projects/new-xgi.xgwx",
+      "fixture_sha256": "d738e4625a838d8a1954b50512fddbcb0fa40e89b56ac04fa9d9a593745d63c7",
+      "preserve_programs": [
+        0
+      ],
+      "setup": [
+        {
+          "name": "create_program",
+          "args": {
+            "patch": {
+              "name": "TextProgram",
+              "language": "IL",
+              "object_id": "f16b3401-579a-4c20-a120-028379000001",
+              "symbol_id": "f16b3402-579a-4c20-a120-028379000002"
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "name": "edit_text_variable",
+          "args": {
+            "expected_object_id": "f16b3401-579a-4c20-a120-028379000001",
+            "patch": {
+              "program_index": 1,
+              "expected_variables": [],
+              "name": "Run",
+              "data_type": "BOOL",
+              "description": "Run request",
+              "remove": false
+            }
+          }
+        },
+        {
+          "name": "edit_text_program",
+          "args": {
+            "patch": {
+              "program_index": 1,
+              "expected_object_id": "f16b3401-579a-4c20-a120-028379000001",
+              "expected_language": "IL",
+              "expected_source": "",
+              "source": "LD TRUE\r\nST Run\r\nRET\r\n"
+            }
+          }
+        }
+      ],
+      "expect": {}
+    },
+    {
+      "id": "xgk-vendor-il",
+      "fixture": "empty-projects/new-xgk.xgwx",
+      "fixture_sha256": "168296bd4049aff9edc6c75eeffd005ba108d9a5bf2686f0a959bf7401279c06",
+      "preserve_programs": [],
+      "setup": [],
+      "operations": [
+        {
+          "name": "edit_vendor_il",
+          "args": {
+            "patch": {
+              "program_index": 0,
+              "expected_object_id": "6e21ead1-7ec8-45fe-8bca-1bc17dbbe5f0",
+              "expected_source": "",
+              "source": "LOAD M00000\nOUT M00001"
+            }
+          }
+        }
+      ],
+      "expect": {}
     }
   ]
 }
