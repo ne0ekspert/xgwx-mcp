@@ -6,7 +6,7 @@ Local Rust stdio MCP server for inspecting and editing LS XG5000 `.xgwx` files t
 
 Keep this repository beside `libxgwx`; the dependency is `../libxgwx` with its `write` and `il` features enabled. Build with Rust 1.88 or newer:
 
-The tested library baseline is commit `91705f5`, with the public `rename_project`
+The tested library baseline is commit `b475c82`, with the public `rename_project`
 writer used by named-project creation. If that writer is absent, apply the bundled
 dependency patch from the library directory:
 
@@ -103,6 +103,11 @@ python3 -m unittest discover -s tests -p 'test_instruction_*.py'
 Omit `--check` to regenerate. The generator preserves independently changed guide files and does not include the CHM or raw HTML in the skill. Reviewed English notes complement the retained Korean source explanations; the XGK/XGB manual does not define IEC function behavior.
 
 ## Verification
+
+GitHub CI checks Rust formatting, Rust and stdio integration tests, the Python
+instruction-guide tests, and a release build with a CLI smoke check. It checks
+out the pinned library baseline beside this repository so dependency paths and
+fixture tests match local builds.
 
 ```bash
 cargo test --locked

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: xgwx-mcp
+    steps:
+      - name: Check out MCP server
+        uses: actions/checkout@v4
+        with:
+          path: xgwx-mcp
+      - name: Check out compatible library and fixtures
+        uses: actions/checkout@v4
+        with:
+          repository: ne0ekspert/libxgwx
+          ref: b475c822478287ad31a21536fbf9845b5440351f
+          path: libxgwx
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Rust formatting
+        run: cargo fmt --check
+      - name: Run Rust and stdio integration tests
+        run: cargo test --locked
+      - name: Check instruction guides and source metadata
+        run: python3 -m unittest discover -s tests -p 'test_instruction_*.py'
+      - name: Build release server
+        run: cargo build --release --locked
+      - name: Verify CLI entry point
+        run: ./target/release/xgwx-mcp --help
