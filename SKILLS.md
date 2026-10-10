@@ -7,7 +7,7 @@ Use `xgwx-mcp` to inspect a local LS XG5000 project, discover the library's supp
 Keep `xgwx-mcp` and `libxgwx` as sibling directories and build the server with Rust 1.88 or newer:
 
 ```bash
-cd /home/ne0ekspert/xgwx-mcp
+cd /path/to/xgwx-mcp
 cargo build --release --locked
 ```
 
@@ -22,7 +22,7 @@ If that skill directory already exists, review it before replacing it. Installin
 
 ```toml
 [mcp_servers.xgwx]
-command = "/home/ne0ekspert/xgwx-mcp/target/release/xgwx-mcp"
+command = "/path/to/xgwx-mcp/target/release/xgwx-mcp"
 args = ["--root", "/path/to/projects"]
 ```
 
@@ -32,7 +32,7 @@ A client using the common JSON MCP configuration shape can use:
 {
   "mcpServers": {
     "xgwx": {
-      "command": "/home/ne0ekspert/xgwx-mcp/target/release/xgwx-mcp",
+      "command": "/path/to/xgwx-mcp/target/release/xgwx-mcp",
       "args": ["--root", "/path/to/projects"]
     }
   }

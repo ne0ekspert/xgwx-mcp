@@ -20,7 +20,7 @@ the full coverage audit passes. The baseline includes standalone ST/IL and XGK
 IL writers, plus the `create_project` generator and native defaults.
 
 ```bash
-cd /home/ne0ekspert/xgwx-mcp
+cd /path/to/xgwx-mcp
 cargo build --release --locked
 ```
 
@@ -28,7 +28,7 @@ Launch from the directory containing the projects the agent should access:
 
 ```bash
 cd /path/to/projects
-/home/ne0ekspert/xgwx-mcp/target/release/xgwx-mcp
+/path/to/xgwx-mcp/target/release/xgwx-mcp
 ```
 
 The startup directory is always an allowed root. Add directories with repeatable `--root DIRECTORY` arguments. Relative file paths resolve against the startup directory. The server canonicalizes paths and rejects files outside its roots, including symlinks that escape them.
