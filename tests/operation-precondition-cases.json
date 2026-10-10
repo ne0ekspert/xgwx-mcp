@@ -1,0 +1,773 @@
+{
+  "edit_browser_hardware": {
+    "patch": {
+      "operation": "__invalid__",
+      "base": 999999999,
+      "slot": null,
+      "expected_value": "__invalid__",
+      "replacement": "__invalid__",
+      "key": null,
+      "index": null
+    }
+  },
+  "edit_browser_network": {
+    "patch": {
+      "network_index": 999999999,
+      "module": false,
+      "base": null,
+      "slot": null,
+      "field": "__invalid__",
+      "expected_value": "__invalid__",
+      "replacement": "__invalid__"
+    }
+  },
+  "edit_fenet_field": {
+    "patch": {
+      "base": 999999999,
+      "slot": 999999999,
+      "field": "__invalid__",
+      "expected_value": "__invalid__",
+      "replacement": "__invalid__"
+    }
+  },
+  "select_cpu": {
+    "model": "__invalid__"
+  },
+  "set_base_slot_count": {
+    "base": 999999999,
+    "slot_count": 0
+  },
+  "insert_module": {
+    "base": 999999999,
+    "slot": 999999999,
+    "model": "__invalid__"
+  },
+  "delete_module": {
+    "base": 999999999,
+    "slot": 999999999
+  },
+  "select_module": {
+    "base": 999999999,
+    "slot": 999999999,
+    "model": "__invalid__"
+  },
+  "set_module_option": {
+    "base": 999999999,
+    "slot": 999999999,
+    "key": "__invalid__",
+    "index": 0,
+    "value": 0
+  },
+  "update_module": {
+    "base": 999999999,
+    "slot": 999999999,
+    "patch": {
+      "id": null,
+      "sub_type": null,
+      "name": null,
+      "comment": null,
+      "details": null
+    }
+  },
+  "set_module_input_filter": {
+    "base": 999999999,
+    "slot": 999999999,
+    "filter": "Default"
+  },
+  "edit_browser_iec": {
+    "index": 999999999,
+    "patch": {
+      "operation": "__invalid__",
+      "offset": 999999999,
+      "expected_kind": "__invalid__",
+      "expected_value": "__invalid__",
+      "replacement": "__invalid__"
+    }
+  },
+  "update_program": {
+    "program_index": 999999999,
+    "patch": {
+      "name": null,
+      "task": null,
+      "version": null,
+      "kind": null,
+      "instance_name": null,
+      "comment": null
+    }
+  },
+  "update_network": {
+    "network_index": 999999999,
+    "patch": {
+      "name": null,
+      "type_name": null,
+      "network_type": null
+    }
+  },
+  "update_network_module": {
+    "base": 999999999,
+    "slot": 999999999,
+    "patch": {
+      "config_name": null,
+      "alias": null,
+      "description": null
+    }
+  },
+  "update_variable": {
+    "variable_index": 999999999,
+    "patch": {
+      "name": null,
+      "address_area": null,
+      "address_number": null,
+      "data_type": null,
+      "description": null
+    }
+  },
+  "update_iec_local_symbol_address": {
+    "program_index": 999999999,
+    "symbol_index": 999999999,
+    "expected_name": "__invalid__",
+    "expected_address": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "rename_iec_local_symbol": {
+    "program_index": 999999999,
+    "symbol_index": 999999999,
+    "expected_name": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "duplicate_iec_ld_function_instance": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_instance": "__invalid__",
+    "new_instance": "__invalid__"
+  },
+  "copy_iec_instance_declaration_to_program": {
+    "source_program_index": 999999999,
+    "source_instance": "__invalid__",
+    "destination_program_index": 999999999,
+    "new_instance": "__invalid__"
+  },
+  "update_iec_local_symbol_description": {
+    "program_index": 999999999,
+    "symbol_index": 999999999,
+    "expected_name": "__invalid__",
+    "expected_description": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "insert_iec_local_symbol": {
+    "program_index": 999999999,
+    "name": "__invalid__",
+    "data_type": "__invalid__",
+    "description": "__invalid__"
+  },
+  "delete_iec_local_symbol": {
+    "program_index": 999999999,
+    "symbol_index": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "update_iec_local_symbol_type": {
+    "program_index": 999999999,
+    "symbol_index": 999999999,
+    "expected_name": "__invalid__",
+    "expected_type": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "update_ladder_cell_text": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "update_iec_ld_comment": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "update_iec_ld_rising_contact_operand": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "update_iec_ld_element_operand": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "update_iec_ld_contact_kind": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "update_iec_ld_coil_kind": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "edit_iec_ld_branch_segment": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "start_row_index": 0,
+    "end_row_index": 0,
+    "x": 0,
+    "expected": false,
+    "present": false
+  },
+  "edit_iec_ld_vertical_wire": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "start_row_index": 0,
+    "end_row_index": 0,
+    "x": 0,
+    "expected": false,
+    "present": false
+  },
+  "connect_iec_ld_groups": {
+    "program_index": 999999999,
+    "upper_group_index": 999999999,
+    "expected_upper_row": 0,
+    "lower_group_index": 999999999,
+    "expected_lower_row": 0,
+    "x": 0
+  },
+  "extend_iec_ld_vertical_wire": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "start_row_index": 0,
+    "x": 0
+  },
+  "split_iec_ld_group": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "expected_upper_row": 0,
+    "expected_lower_row": 0
+  },
+  "insert_iec_ld_blank_row": {
+    "program_index": 999999999,
+    "after_row_index": 0
+  },
+  "insert_iec_ld_parallel_contact": {
+    "program_index": 999999999,
+    "row_index": 0,
+    "expected_contact_variable": "__invalid__",
+    "expected_coil_variable": "__invalid__",
+    "parallel_variable": "__invalid__"
+  },
+  "insert_iec_ld_parallel_contact_kind": {
+    "program_index": 999999999,
+    "row_index": 0,
+    "expected_contact_variable": "__invalid__",
+    "expected_coil_variable": "__invalid__",
+    "parallel_kind": "__invalid__",
+    "parallel_variable": "__invalid__"
+  },
+  "delete_iec_ld_blank_row": {
+    "program_index": 999999999,
+    "blank_row_index": 0
+  },
+  "insert_iec_ld_linear_rung": {
+    "program_index": 999999999,
+    "blank_row_index": 0,
+    "contact_variable": "__invalid__",
+    "coil_variable": "__invalid__"
+  },
+  "insert_iec_ld_rung": {
+    "program_index": 999999999,
+    "blank_row_index": 0,
+    "contact_kind": "__invalid__",
+    "contact_variable": "__invalid__",
+    "coil_kind": "__invalid__",
+    "coil_variable": "__invalid__"
+  },
+  "insert_iec_ld_single_element": {
+    "program_index": 999999999,
+    "row_index": 0,
+    "raw_x": 0,
+    "category": "__invalid__",
+    "kind": "__invalid__",
+    "operand": "__invalid__"
+  },
+  "delete_iec_ld_linear_rung": {
+    "program_index": 999999999,
+    "row_index": 0,
+    "expected_contact_variable": "__invalid__",
+    "expected_coil_variable": "__invalid__"
+  },
+  "delete_iec_ld_rung": {
+    "program_index": 999999999,
+    "row_index": 0,
+    "expected_contact_kind": "__invalid__",
+    "expected_contact_variable": "__invalid__",
+    "expected_coil_kind": "__invalid__",
+    "expected_coil_variable": "__invalid__"
+  },
+  "delete_iec_ld_terminal_coil": {
+    "program_index": 999999999,
+    "coil_record_offset": 999999999,
+    "expected_variable": "__invalid__"
+  },
+  "insert_iec_ld_terminal_coil": {
+    "program_index": 999999999,
+    "contact_record_offset": 999999999,
+    "expected_contact_variable": "__invalid__",
+    "coil_kind": "__invalid__",
+    "coil_variable": "__invalid__"
+  },
+  "delete_iec_ld_simple_row": {
+    "program_index": 999999999,
+    "row_index": 0,
+    "expected_contact_kind": "__invalid__",
+    "expected_contact_variable": "__invalid__",
+    "expected_coil_kind": "__invalid__",
+    "expected_coil_variable": "__invalid__"
+  },
+  "delete_iec_ld_branch_top_row": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "row_index": 0
+  },
+  "delete_iec_ld_nested_contact_branch_row": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "row_index": 0
+  },
+  "delete_iec_ld_chained_contact_branch_row": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "row_index": 0
+  },
+  "delete_iec_ld_empty_branch_row": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "row_index": 0
+  },
+  "delete_iec_ld_ff_branch_output_row": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "row_index": 0
+  },
+  "insert_iec_ld_no_contact": {
+    "program_index": 999999999,
+    "wire_offset": 999999999,
+    "raw_x": 0,
+    "expected_wire_start_x": 0,
+    "expected_wire_end_x": 0,
+    "variable": "__invalid__"
+  },
+  "insert_iec_ld_leading_contact": {
+    "program_index": 999999999,
+    "insertion_offset": 999999999,
+    "contact_kind": "__invalid__",
+    "variable": "__invalid__"
+  },
+  "insert_iec_ld_contact": {
+    "program_index": 999999999,
+    "wire_offset": 999999999,
+    "raw_x": 0,
+    "expected_wire_start_x": 0,
+    "expected_wire_end_x": 0,
+    "contact_kind": "__invalid__",
+    "variable": "__invalid__"
+  },
+  "insert_iec_ld_short_wire_contact": {
+    "program_index": 999999999,
+    "wire_offset": 999999999,
+    "expected_raw_x": 0,
+    "contact_kind": "__invalid__",
+    "variable": "__invalid__"
+  },
+  "delete_iec_ld_contact": {
+    "program_index": 999999999,
+    "contact_offset": 999999999,
+    "expected_raw_x": 0,
+    "expected_contact_kind": "__invalid__",
+    "expected_variable": "__invalid__"
+  },
+  "delete_iec_ld_no_contact": {
+    "program_index": 999999999,
+    "contact_offset": 999999999,
+    "expected_raw_x": 0,
+    "expected_variable": "__invalid__"
+  },
+  "delete_iec_ld_contact_cell": {
+    "program_index": 999999999,
+    "contact_offset": 999999999,
+    "expected_raw_x": 0,
+    "expected_contact_kind": "__invalid__",
+    "expected_variable": "__invalid__"
+  },
+  "delete_iec_ld_no_contact_cell": {
+    "program_index": 999999999,
+    "contact_offset": 999999999,
+    "expected_raw_x": 0,
+    "expected_variable": "__invalid__"
+  },
+  "delete_iec_ld_horizontal_wire": {
+    "program_index": 999999999,
+    "wire_offset": 999999999,
+    "expected_raw_x": 0
+  },
+  "delete_ladder_horizontal_wire": {
+    "program_index": 999999999,
+    "raw_y": 0,
+    "start_x": 0,
+    "end_x": 0
+  },
+  "delete_ladder_vertical_wire": {
+    "program_index": 999999999,
+    "raw_x": 0,
+    "start_y": 0,
+    "end_y": 0
+  },
+  "delete_iec_ld_horizontal_wire_record": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected_start_x": 0,
+    "expected_end_x": 0
+  },
+  "delete_iec_ld_isolated_element": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__"
+  },
+  "insert_iec_ld_function_output_wire": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__",
+    "pin_name": "__invalid__",
+    "start_x": 0
+  },
+  "repair_iec_ld_horizontal_wire": {
+    "program_index": 999999999,
+    "insertion_offset": 999999999,
+    "expected_raw_x": 0
+  },
+  "delete_iec_ld_function_output_operand": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__"
+  },
+  "assign_iec_ld_function_output_operand": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__",
+    "ordinal": 0,
+    "value": "__invalid__"
+  },
+  "update_iec_ld_function_operand": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "delete_iec_ld_scalar_chain_function": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "replace_iec_ld_scalar_chain_function": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__",
+    "function_name": "__invalid__",
+    "operands": []
+  },
+  "delete_iec_ld_terminal_function": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "insert_iec_ld_terminal_timer": {
+    "program_index": 999999999,
+    "contact_offset": 999999999,
+    "instance": "__invalid__",
+    "preset": "__invalid__",
+    "elapsed": "__invalid__"
+  },
+  "insert_iec_ld_terminal_move": {
+    "program_index": 999999999,
+    "contact_offset": 999999999,
+    "input_operand": "__invalid__",
+    "output_operand": "__invalid__"
+  },
+  "delete_iec_ld_standalone_function": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "delete_iec_ld_group": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "expected_first_row_index": 0
+  },
+  "replace_iec_ld_group": {
+    "program_index": 999999999,
+    "source_group_index": 999999999,
+    "expected_source_first_row_index": 0,
+    "destination_group_index": 999999999,
+    "expected_destination_first_row_index": 0
+  },
+  "replace_iec_ld_group_from_program": {
+    "source_program_index": 999999999,
+    "source_group_index": 999999999,
+    "expected_source_first_row_index": 0,
+    "destination_program_index": 999999999,
+    "destination_group_index": 999999999,
+    "expected_destination_first_row_index": 0,
+    "copy_missing_locals": false
+  },
+  "move_iec_ld_group": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "expected_first_row_index": 0,
+    "destination_first_row_index": 0
+  },
+  "copy_iec_ld_group": {
+    "program_index": 999999999,
+    "group_index": 999999999,
+    "expected_first_row_index": 0,
+    "destination_first_row_index": 0
+  },
+  "copy_iec_ld_group_to_program": {
+    "source_program_index": 999999999,
+    "group_index": 999999999,
+    "expected_first_row_index": 0,
+    "destination_program_index": 999999999,
+    "destination_first_row_index": 0
+  },
+  "copy_iec_ld_group_to_program_with_locals": {
+    "source_program_index": 999999999,
+    "group_index": 999999999,
+    "expected_first_row_index": 0,
+    "destination_program_index": 999999999,
+    "destination_first_row_index": 0
+  },
+  "insert_iec_ld_comment": {
+    "program_index": 999999999,
+    "destination_row_index": 0,
+    "text": "__invalid__"
+  },
+  "delete_iec_ld_branch_function": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "replace_iec_ld_branch_function": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__",
+    "function_name": "__invalid__",
+    "operands": []
+  },
+  "insert_iec_ld_function": {
+    "program_index": 999999999,
+    "row_index": 0,
+    "raw_x": 0,
+    "function_name": "__invalid__",
+    "operands": []
+  },
+  "insert_iec_ld_standalone_function": {
+    "program_index": 999999999,
+    "insertion_offset": 999999999,
+    "function_name": "__invalid__",
+    "input_operand": "__invalid__",
+    "output_operand": "__invalid__"
+  },
+  "insert_iec_ld_function_cell": {
+    "program_index": 999999999,
+    "insertion_offset": 999999999,
+    "function_name": "__invalid__",
+    "instance_name": "__invalid__"
+  },
+  "delete_iec_ld_function_cell": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "delete_iec_ld_eq_chain_head": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "delete_iec_ld_heating_chain_head": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "delete_iec_ld_heating_chain_middle": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "delete_iec_ld_heating_chain_x15_eq": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "delete_iec_ld_heating_chain_contact_eq": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "delete_iec_ld_heating_chain_x3_eq_repaired": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "delete_iec_ld_heating_chain_x3_eq": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "repair_iec_ld_heating_chain_x3_eq_deletion": {
+    "program_index": 999999999
+  },
+  "delete_iec_ld_connected_arithmetic": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "delete_iec_ld_branched_arithmetic": {
+    "program_index": 999999999,
+    "block_offset": 999999999,
+    "expected_name": "__invalid__"
+  },
+  "update_iec_ld_arithmetic_function": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "update_iec_ld_comparison_function": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__",
+    "replacement": "__invalid__"
+  },
+  "edit_ladder_cell": {
+    "program_index": 999999999,
+    "edit": {
+      "raw_y": 0,
+      "column": 0,
+      "expected": null,
+      "replacement": null
+    }
+  },
+  "insert_ladder_instruction": {
+    "program_index": 999999999,
+    "raw_y": 0,
+    "mnemonic": "__invalid__",
+    "operands": []
+  },
+  "insert_ladder_comparison": {
+    "program_index": 999999999,
+    "raw_y": 0,
+    "column": 0,
+    "mnemonic": "__invalid__",
+    "operands": []
+  },
+  "delete_ladder_comparison": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__"
+  },
+  "delete_ladder_instruction": {
+    "program_index": 999999999,
+    "offset": 999999999,
+    "expected": "__invalid__"
+  },
+  "edit_ladder_comment": {
+    "program_index": 999999999,
+    "edit": {
+      "kind": "Rung",
+      "raw_y": 0,
+      "expected": null,
+      "replacement": "__invalid__"
+    }
+  },
+  "delete_ladder_rung_comment": {
+    "program_index": 999999999,
+    "raw_y": 0,
+    "expected": "__invalid__"
+  },
+  "edit_ladder_branch": {
+    "program_index": 999999999,
+    "edit": {
+      "raw_y": 0,
+      "boundary": 0,
+      "expected": false,
+      "present": false
+    }
+  },
+  "insert_ladder_row": {
+    "program_index": 999999999,
+    "raw_y": 0
+  },
+  "move_program": {
+    "from": 999999999,
+    "to": 999999999,
+    "expected_object_id": "__invalid__",
+    "expected_target_id": "__invalid__"
+  },
+  "delete_program": {
+    "program_index": 999999999,
+    "expected_object_id": "__invalid__"
+  },
+  "create_program": {
+    "patch": {
+      "name": "__invalid__",
+      "language": "__invalid__",
+      "object_id": "__invalid__",
+      "symbol_id": "__invalid__"
+    }
+  },
+  "edit_cnet_settings": {
+    "patch": {
+      "base": 999999999,
+      "slot": 999999999,
+      "changes": []
+    }
+  },
+  "edit_sfc_entity": {
+    "patch": {
+      "program_index": 999999999,
+      "block_index": 999999999,
+      "entity_index": 999999999,
+      "expected_type": 0,
+      "expected_row": 0,
+      "expected_column": 0,
+      "field": "__invalid__",
+      "expected_value": "__invalid__",
+      "replacement": "__invalid__"
+    }
+  },
+  "replace_sfc_sequence": {
+    "patch": {
+      "program_index": 999999999,
+      "block_index": 999999999,
+      "expected_entities": [],
+      "rows": [],
+      "expected_rows": null
+    }
+  },
+  "edit_sfc_variable": {
+    "patch": {
+      "program_index": 999999999,
+      "expected_variables": [],
+      "name": "__invalid__",
+      "data_type": "__invalid__",
+      "description": "__invalid__",
+      "remove": false,
+      "declaration": null,
+      "update": false
+    }
+  },
+  "rename_project": {
+    "expected_name": "stale project name",
+    "name": "Machine"
+  }
+}

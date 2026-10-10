@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "identity_policy": "preserve_native_template_identities",
+  "templates": [
+    {
+      "id": "xgk_ld",
+      "file": "xgk_ld.xgwx",
+      "source": "libxgwx/fixtures/empty-projects/new-xgk.xgwx",
+      "sha256": "168296bd4049aff9edc6c75eeffd005ba108d9a5bf2686f0a959bf7401279c06",
+      "default_cpu_model": "XGK-CPUSN"
+    },
+    {
+      "id": "xgi_ld",
+      "file": "xgi_ld.xgwx",
+      "source": "libxgwx/fixtures/empty-projects/new-xgi.xgwx",
+      "sha256": "d738e4625a838d8a1954b50512fddbcb0fa40e89b56ac04fa9d9a593745d63c7",
+      "default_cpu_model": "XGI-CPUE"
+    },
+    {
+      "id": "xgi_sfc",
+      "file": "xgi_sfc.xgwx",
+      "source": "libxgwx/fixtures/sfc/new-xgi-sfc.xgwx",
+      "sha256": "891c988a575473386fb623c7eb65d10600bda6ac1ed28b4d1db0690ca4c023e7",
+      "default_cpu_model": "XGI-CPUE"
+    }
+  ]
+}

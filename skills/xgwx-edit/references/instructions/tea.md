@@ -1,0 +1,96 @@
+---
+name: "xgk-tea"
+description: "Use TEA with its XGK/XGB manual behavior, operands, and current XGWX editing constraints."
+metadata:
+  manual: "XGK(B)InstructionHelp_Kr_V3.5.chm"
+  manual_sha256: "b866d589d800addcb039f9f09b182592464d6367faa55abf6dde9ac34a1580e0"
+  manual_pages: ["44127tea.htm"]
+---
+
+# TEA
+
+Manual section(s): 4.41.27. Original Korean notes below may cover the other variants on the same page; apply the widths and execution form of `TEA`.
+
+## Editing route
+
+Use `insert_ladder_instruction` after calling `describe_operation` for its current schema.
+The writer mnemonic is `TEA`; the catalog records opcode `1000` and `6` operands in order.
+Inspect the CPU/project and target cells first. Use the inspected revision and positions, preserve expected values, dry-run when useful, then save and inspect the result. See the [editing skill](../../SKILL.md) and [ladder workflow](../ladder.md).
+
+## Operands
+
+| Order | Operand | Description (Korean manual) | Reviewed types | Device areas | Constant |
+| --- | --- | --- | --- | --- | --- |
+| 1 | sl | 위치 모듈이 장착된 베이스(x)와 슬롯(y) 번호:h00xy | WORD | Unknown | Unknown |
+| 2 | ax | 직접 기동 지령을 실행할 축 (0:X 축,1:Y 축,2:Z 축) | WORD | PMK, L, Z, N, D, R | Allowed |
+| 3 | n1 | 티칭할 데이터 값 | DINT | PMK, L, Z, N, D, R | Allowed |
+| 4 | n2 | 티칭할 스텝 번호(0 ~ 400) | WORD | PMK, L, Z, N, D, R | Allowed |
+| 5 | n3 | 티칭 방법 설정 0:RAM티칭, 1:ROM티칭 | WORD | PMK, L, Z, N, D, R | Allowed |
+| 6 | n4 | 티칭 항목 설정 0:위치티칭, 1:속도티칭 | WORD | PMK, L, Z, N, D, R | Allowed |
+
+These are the current library's reviewed operand rules. A shared type union is not a per-variant type choice; use the manual behavior to select the required width. Missing permissions stay unknown.
+
+## CPU and acceptance
+
+No separately reviewed CPU-model restriction is available in the current catalog; this means unknown, not universal compatibility.
+Check the applicable model, firmware, modules and memory spans stated in the manual notes. Local parsing, writer validation and IL conversion do not prove native compilation or PLC behavior. Native acceptance requires XG5000 Open → Check Program → Save As → comparison.
+
+## Manual behavior notes (Korean)
+
+- ※ 오퍼랜드 설정 범위는 XGF-PxxA를 기준으로 합니다. 축에 대한 오퍼랜드(ax)의 설정 범위는 제품에서 지원하는 제어 축 수에 따라 다르니, 제품 사용설명서를 참조하여 주십시오.
+- 이 명령은 1개의 지정 스텝에 설정한 목표 위치 또는 운전 속도의 값을 변경하는 기능입니다.
+- sl(위치결정 모듈의 슬롯번호)로 지정된 위치결정 모듈의 ax로 지정된 축에 ax축의 n2스텝의 데이터 중 n4값에 따라 목표위치나 목표속도를 n1의 값으로 변경하는 티칭 명령을 합니다.
+- 목표 위치 값과 운전 속도 값을 빈번하게 변경하여 사용할 경우 이 기능을 사용하면 편리합니다.
+- 목표 위치 값이 변경되는 것을 위치 티칭이라 하고 운전 속도 값이 변경되는 것을 속도 티칭이라고 합니다.
+- 이때 n3에 설정된 값에 따라 RAM티칭 혹은 ROM티칭을 할 수 있습니다.
+- n3에 설정할 수 있는 값은 아래와 같습니다.
+- n4에 설정할 수 있는 값은 아래와 같습니다.
+
+| 설정값 | 티칭 방법 |
+| --- | --- |
+| 0 | RAM티칭 |
+| 1 | ROM티칭 |
+
+| 설정값 | 티칭 항목 |
+| --- | --- |
+| 0 | 위치티칭 |
+| 1 | 속도티칭 |
+
+## Manual flags
+
+| 플래그 | 내 용 | 디바이스 번호 |
+| --- | --- | --- |
+| 에러 | ax 값이 범위를 벗어날 경우 | F110 |
+
+## Manual applicability and restrictions
+
+- 적용 기종 : XGK, XBF
+- ax의 설정값이 제품에서 지원하는 설정 범위와 다른 값을 입력하면 에러가 발생(F110이 Set)됩니다.
+
+## Manual flag and step matrix
+
+The shared usage table marks affected flags with `O`, and `-` where it lists no effect. Native steps are the manual's instruction size, not the number of operand arguments. Conditions for setting/clearing flags are in the behavior notes.
+
+| Manual instruction group | Native steps | 에러 (F110) | 제로 (F111) | 캐리 (F112) |
+| --- | --- | --- | --- | --- |
+| TEA | 4~7 | O | - | - |
+
+## Additional source notes after examples
+
+The manual places some execution restrictions and timing conditions after its example heading. Retain those checks below. Example addresses and circuit assumptions describe the source example and are not defaults for a new program.
+
+- 다음과 같은 경우 에러가 되어 티칭 명령을 실행할 수 없습니다.
+- 티칭 스텝 번호를 1 ~ 400 이외의 값으로 설정한 경우
+
+## Referenced manual figures
+
+These figures belong to the shared source topic. Read the source corrections above before using variant-specific layouts or example values.
+
+![TEA source figure 1](assets/0301db1c62a7326f-NewItem3696.png)
+
+## Provenance
+
+Source: `XGK(B)InstructionHelp_Kr_V3.5.chm`, SHA-256 `b866d589d800addcb039f9f09b182592464d6367faa55abf6dde9ac34a1580e0`.
+
+- `44127tea.htm` — §4.41.27; source SHA-256 `4f822b91b331ba9903ad09f11205bdad440778d957a4f9d69cc851933314fbf9`.
+- Additional behavior/operand evidence: `44127tea.htm`.

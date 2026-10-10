@@ -1,0 +1,55 @@
+--- a/src/writer.rs
++++ b/src/writer.rs
+@@ -1875,6 +1875,34 @@
+         candidate.to_verified_bytes()?;
+         *self = candidate;
+         Ok(())
++    }
++
++    /// Rename the root project, preserving all other XML and checking its current name.
++    pub fn rename_project(&mut self, expected_name: &str, name: &str) -> Result<(), XgwxError> {
++        let fail = |reason: &str| XgwxError::ProjectRename(reason.into());
++        if name.trim().is_empty() || name.chars().any(char::is_control) {
++            return Err(fail(
++                "project name must be nonblank and contain no control characters",
++            ));
++        }
++        let parsed = roxmltree::Document::parse(&self.xml).map_err(XgwxError::Xml)?;
++        let root = parsed.root_element();
++        if !root.has_tag_name("Project") {
++            return Err(fail("missing root Project element"));
++        }
++        let names: Vec<_> = root
++            .children()
++            .filter(|n| n.is_text() && !n.text().unwrap_or("").trim().is_empty())
++            .collect();
++        if names.len() != 1 || names[0].text().unwrap_or("").trim() != expected_name {
++            return Err(fail(
++                "project name is missing, ambiguous, or changed; inspect again",
++            ));
++        }
++        if expected_name == name {
++            return Ok(());
++        }
++        self.apply_xml_replacements(vec![(names[0].range(), escape_xml_text(name))])
+     }
+
+     /// Update editable XML metadata for one program selected by document order.
+--- a/src/error.rs
++++ b/src/error.rs
+@@ -203,6 +203,7 @@
+     BrowserHardwareEdit(String),
+     BrowserNetworkEdit(String),
+     SfcEdit(String),
++    ProjectRename(String),
+     ProgramCreation(String),
+     ProgramDeletion(String),
+     ProgramReorder(String),
+@@ -435,6 +436,7 @@
+             Self::BrowserHardwareEdit(reason) => write!(f, "hardware edit rejected: {reason}"),
+             Self::ProgramDeletion(reason) => write!(f, "program deletion rejected: {reason}"),
+             Self::ProgramReorder(reason) => write!(f, "program reorder rejected: {reason}"),
++            Self::ProjectRename(reason) => write!(f, "project rename rejected: {reason}"),
+             Self::ProgramCreation(reason) => write!(f, "program creation rejected: {reason}"),
+             Self::SfcEdit(reason) => write!(f, "SFC edit rejected: {reason}"),
+             Self::BrowserNetworkEdit(reason) => write!(f, "network edit rejected: {reason}"),

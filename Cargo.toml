@@ -1,0 +1,24 @@
+[package]
+name = "xgwx-mcp"
+version = "0.1.0"
+edition = "2024"
+description = "Local MCP server for loss-preserving XGWX inspection and editing"
+license = "Apache-2.0"
+
+[dependencies]
+xgwx = { package = "libxgwx", path = "../libxgwx", features = ["write", "il"] }
+rmcp = { version = "3.5.1", features = ["server", "macros", "schemars", "transport-io"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "process"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1"
+sha2 = "0.10"
+tempfile = "3"
+fs2 = "0.4"
+libc = "0.2"
+
+[dev-dependencies]
+rmcp = { version = "3.5.1", features = ["client", "transport-child-process"] }
+base64 = "0.22"
+bzip2 = { version = "0.5", default-features = false, features = ["libbz2-rs-sys"] }
+roxmltree = "0.20"

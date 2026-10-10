@@ -1,0 +1,992 @@
+{
+  "format_version": 1,
+  "source_crate": "../libxgwx",
+  "public_mutator_count": 120,
+  "excluded_helpers": [
+    "to_bytes",
+    "to_verified_bytes",
+    "write_to"
+  ],
+  "operations": [
+    {
+      "public_writer": "edit_browser_hardware",
+      "source": "src/writer.rs",
+      "operation": "edit_browser_hardware",
+      "adapter": "edit_browser_hardware",
+      "subsystem": "hardware",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_browser_network",
+      "source": "src/writer.rs",
+      "operation": "edit_browser_network",
+      "adapter": "edit_browser_network",
+      "subsystem": "networks",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_fenet_field",
+      "source": "src/writer.rs",
+      "operation": "edit_fenet_field",
+      "adapter": "edit_fenet_field",
+      "subsystem": "networks",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "select_cpu",
+      "source": "src/writer.rs",
+      "operation": "select_cpu",
+      "adapter": "select_cpu",
+      "subsystem": "hardware",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "set_base_slot_count",
+      "source": "src/writer.rs",
+      "operation": "set_base_slot_count",
+      "adapter": "set_base_slot_count",
+      "subsystem": "hardware",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_module",
+      "source": "src/writer.rs",
+      "operation": "insert_module",
+      "adapter": "insert_module",
+      "subsystem": "hardware",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_module",
+      "source": "src/writer.rs",
+      "operation": "delete_module",
+      "adapter": "delete_module",
+      "subsystem": "hardware",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "select_module",
+      "source": "src/writer.rs",
+      "operation": "select_module",
+      "adapter": "select_module",
+      "subsystem": "hardware",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "set_module_option",
+      "source": "src/writer.rs",
+      "operation": "set_module_option",
+      "adapter": "set_module_option",
+      "subsystem": "hardware",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_module",
+      "source": "src/writer.rs",
+      "operation": "update_module",
+      "adapter": "update_module",
+      "subsystem": "hardware",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "set_module_input_filter",
+      "source": "src/writer.rs",
+      "operation": "set_module_input_filter",
+      "adapter": "set_module_input_filter",
+      "subsystem": "hardware",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_browser_iec",
+      "source": "src/writer.rs",
+      "operation": "edit_browser_iec",
+      "adapter": "edit_browser_iec",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_program",
+      "source": "src/writer.rs",
+      "operation": "update_program",
+      "adapter": "update_program",
+      "subsystem": "programs",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_network",
+      "source": "src/writer.rs",
+      "operation": "update_network",
+      "adapter": "update_network",
+      "subsystem": "networks",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_network_module",
+      "source": "src/writer.rs",
+      "operation": "update_network_module",
+      "adapter": "update_network_module",
+      "subsystem": "networks",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "generate_io_variables",
+      "source": "src/writer.rs",
+      "operation": "generate_io_variables",
+      "adapter": "generate_io_variables",
+      "subsystem": "symbols",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_variable",
+      "source": "src/writer.rs",
+      "operation": "update_variable",
+      "adapter": "update_variable",
+      "subsystem": "symbols",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_iec_local_symbol_address",
+      "source": "src/writer.rs",
+      "operation": "update_iec_local_symbol_address",
+      "adapter": "update_iec_local_symbol_address",
+      "subsystem": "symbols",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "rename_iec_local_symbol",
+      "source": "src/writer.rs",
+      "operation": "rename_iec_local_symbol",
+      "adapter": "rename_iec_local_symbol",
+      "subsystem": "symbols",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "duplicate_iec_ld_function_instance",
+      "source": "src/writer.rs",
+      "operation": "duplicate_iec_ld_function_instance",
+      "adapter": "duplicate_iec_ld_function_instance",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "copy_iec_instance_declaration_to_program",
+      "source": "src/writer.rs",
+      "operation": "copy_iec_instance_declaration_to_program",
+      "adapter": "copy_iec_instance_declaration_to_program",
+      "subsystem": "symbols",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_iec_local_symbol_description",
+      "source": "src/writer.rs",
+      "operation": "update_iec_local_symbol_description",
+      "adapter": "update_iec_local_symbol_description",
+      "subsystem": "symbols",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_local_symbol",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_local_symbol",
+      "adapter": "insert_iec_local_symbol",
+      "subsystem": "symbols",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_local_symbol",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_local_symbol",
+      "adapter": "delete_iec_local_symbol",
+      "subsystem": "symbols",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_iec_local_symbol_type",
+      "source": "src/writer.rs",
+      "operation": "update_iec_local_symbol_type",
+      "adapter": "update_iec_local_symbol_type",
+      "subsystem": "symbols",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_ladder_cell_text",
+      "source": "src/writer.rs",
+      "operation": "update_ladder_cell_text",
+      "adapter": "update_ladder_cell_text",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_iec_ld_comment",
+      "source": "src/writer.rs",
+      "operation": "update_iec_ld_comment",
+      "adapter": "update_iec_ld_comment",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_iec_ld_rising_contact_operand",
+      "source": "src/writer.rs",
+      "operation": "update_iec_ld_rising_contact_operand",
+      "adapter": "update_iec_ld_rising_contact_operand",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_iec_ld_element_operand",
+      "source": "src/writer.rs",
+      "operation": "update_iec_ld_element_operand",
+      "adapter": "update_iec_ld_element_operand",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_iec_ld_contact_kind",
+      "source": "src/writer.rs",
+      "operation": "update_iec_ld_contact_kind",
+      "adapter": "update_iec_ld_contact_kind",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_iec_ld_coil_kind",
+      "source": "src/writer.rs",
+      "operation": "update_iec_ld_coil_kind",
+      "adapter": "update_iec_ld_coil_kind",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_iec_ld_branch_segment",
+      "source": "src/writer.rs",
+      "operation": "edit_iec_ld_branch_segment",
+      "adapter": "edit_iec_ld_branch_segment",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_iec_ld_vertical_wire",
+      "source": "src/writer.rs",
+      "operation": "edit_iec_ld_vertical_wire",
+      "adapter": "edit_iec_ld_vertical_wire",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "connect_iec_ld_groups",
+      "source": "src/writer.rs",
+      "operation": "connect_iec_ld_groups",
+      "adapter": "connect_iec_ld_groups",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "extend_iec_ld_vertical_wire",
+      "source": "src/writer.rs",
+      "operation": "extend_iec_ld_vertical_wire",
+      "adapter": "extend_iec_ld_vertical_wire",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "split_iec_ld_group",
+      "source": "src/writer.rs",
+      "operation": "split_iec_ld_group",
+      "adapter": "split_iec_ld_group",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_blank_row",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_blank_row",
+      "adapter": "insert_iec_ld_blank_row",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_parallel_contact",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_parallel_contact",
+      "adapter": "insert_iec_ld_parallel_contact_kind",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {
+        "parallel_kind": "NO"
+      }
+    },
+    {
+      "public_writer": "insert_iec_ld_parallel_contact_kind",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_parallel_contact_kind",
+      "adapter": "insert_iec_ld_parallel_contact_kind",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_blank_row",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_blank_row",
+      "adapter": "delete_iec_ld_blank_row",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_linear_rung",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_linear_rung",
+      "adapter": "insert_iec_ld_rung",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {
+        "contact_kind": "NO",
+        "coil_kind": "OUTPUT"
+      }
+    },
+    {
+      "public_writer": "insert_iec_ld_rung",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_rung",
+      "adapter": "insert_iec_ld_rung",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_single_element",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_single_element",
+      "adapter": "insert_iec_ld_single_element",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_linear_rung",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_linear_rung",
+      "adapter": "delete_iec_ld_rung",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {
+        "expected_contact_kind": "NO",
+        "expected_coil_kind": "OUTPUT"
+      }
+    },
+    {
+      "public_writer": "delete_iec_ld_rung",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_rung",
+      "adapter": "delete_iec_ld_rung",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_terminal_coil",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_terminal_coil",
+      "adapter": "delete_iec_ld_terminal_coil",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_terminal_coil",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_terminal_coil",
+      "adapter": "insert_iec_ld_terminal_coil",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_simple_row",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_simple_row",
+      "adapter": "delete_iec_ld_simple_row",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_branch_top_row",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_branch_top_row",
+      "adapter": "delete_iec_ld_branch_top_row",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_nested_contact_branch_row",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_nested_contact_branch_row",
+      "adapter": "delete_iec_ld_nested_contact_branch_row",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_chained_contact_branch_row",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_chained_contact_branch_row",
+      "adapter": "delete_iec_ld_chained_contact_branch_row",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_empty_branch_row",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_empty_branch_row",
+      "adapter": "delete_iec_ld_empty_branch_row",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_ff_branch_output_row",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_ff_branch_output_row",
+      "adapter": "delete_iec_ld_ff_branch_output_row",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_no_contact",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_no_contact",
+      "adapter": "insert_iec_ld_contact",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {
+        "contact_kind": "NO"
+      }
+    },
+    {
+      "public_writer": "insert_iec_ld_leading_contact",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_leading_contact",
+      "adapter": "insert_iec_ld_leading_contact",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_contact",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_contact",
+      "adapter": "insert_iec_ld_contact",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_short_wire_contact",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_short_wire_contact",
+      "adapter": "insert_iec_ld_short_wire_contact",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_contact",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_contact",
+      "adapter": "delete_iec_ld_contact",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_no_contact",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_no_contact",
+      "adapter": "delete_iec_ld_no_contact",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {},
+      "compatibility_relationship": {
+        "relationship": "legacy_primitive",
+        "preferred_operation": "delete_iec_ld_contact",
+        "semantics": "Preferred kind-checked writer delegates to this library primitive. Retain all captured-contact kinds accepted by the original API; do not add a NO-only default."
+      }
+    },
+    {
+      "public_writer": "delete_iec_ld_contact_cell",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_contact_cell",
+      "adapter": "delete_iec_ld_contact_cell",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_no_contact_cell",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_no_contact_cell",
+      "adapter": "delete_iec_ld_no_contact_cell",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {},
+      "compatibility_relationship": {
+        "relationship": "legacy_primitive",
+        "preferred_operation": "delete_iec_ld_contact_cell",
+        "semantics": "Preferred kind-checked writer delegates to this library primitive. Retain all captured-contact kinds accepted by the original API; do not add a NO-only default."
+      }
+    },
+    {
+      "public_writer": "delete_iec_ld_horizontal_wire",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_horizontal_wire",
+      "adapter": "delete_iec_ld_horizontal_wire",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_ladder_horizontal_wire",
+      "source": "src/writer.rs",
+      "operation": "delete_ladder_horizontal_wire",
+      "adapter": "delete_ladder_horizontal_wire",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_ladder_vertical_wire",
+      "source": "src/writer.rs",
+      "operation": "delete_ladder_vertical_wire",
+      "adapter": "delete_ladder_vertical_wire",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_horizontal_wire_record",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_horizontal_wire_record",
+      "adapter": "delete_iec_ld_horizontal_wire_record",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_isolated_element",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_isolated_element",
+      "adapter": "delete_iec_ld_isolated_element",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_function_output_wire",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_function_output_wire",
+      "adapter": "insert_iec_ld_function_output_wire",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "repair_iec_ld_horizontal_wire",
+      "source": "src/writer.rs",
+      "operation": "repair_iec_ld_horizontal_wire",
+      "adapter": "repair_iec_ld_horizontal_wire",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_function_output_operand",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_function_output_operand",
+      "adapter": "delete_iec_ld_function_output_operand",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "assign_iec_ld_function_output_operand",
+      "source": "src/writer.rs",
+      "operation": "assign_iec_ld_function_output_operand",
+      "adapter": "assign_iec_ld_function_output_operand",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_iec_ld_function_operand",
+      "source": "src/writer.rs",
+      "operation": "update_iec_ld_function_operand",
+      "adapter": "update_iec_ld_function_operand",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_scalar_chain_function",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_scalar_chain_function",
+      "adapter": "delete_iec_ld_scalar_chain_function",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "replace_iec_ld_scalar_chain_function",
+      "source": "src/writer.rs",
+      "operation": "replace_iec_ld_scalar_chain_function",
+      "adapter": "replace_iec_ld_scalar_chain_function",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_terminal_function",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_terminal_function",
+      "adapter": "delete_iec_ld_terminal_function",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_terminal_timer",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_terminal_timer",
+      "adapter": "insert_iec_ld_terminal_timer",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_terminal_move",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_terminal_move",
+      "adapter": "insert_iec_ld_terminal_move",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_standalone_function",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_standalone_function",
+      "adapter": "delete_iec_ld_standalone_function",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_group",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_group",
+      "adapter": "delete_iec_ld_group",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "replace_iec_ld_group",
+      "source": "src/writer.rs",
+      "operation": "replace_iec_ld_group",
+      "adapter": "replace_iec_ld_group",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "replace_iec_ld_group_from_program",
+      "source": "src/writer.rs",
+      "operation": "replace_iec_ld_group_from_program",
+      "adapter": "replace_iec_ld_group_from_program",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "move_iec_ld_group",
+      "source": "src/writer.rs",
+      "operation": "move_iec_ld_group",
+      "adapter": "move_iec_ld_group",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "copy_iec_ld_group",
+      "source": "src/writer.rs",
+      "operation": "copy_iec_ld_group",
+      "adapter": "copy_iec_ld_group",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "copy_iec_ld_group_to_program",
+      "source": "src/writer.rs",
+      "operation": "copy_iec_ld_group_to_program",
+      "adapter": "copy_iec_ld_group_to_program",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "copy_iec_ld_group_to_program_with_locals",
+      "source": "src/writer.rs",
+      "operation": "copy_iec_ld_group_to_program_with_locals",
+      "adapter": "copy_iec_ld_group_to_program_with_locals",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_comment",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_comment",
+      "adapter": "insert_iec_ld_comment",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_branch_function",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_branch_function",
+      "adapter": "delete_iec_ld_branch_function",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "replace_iec_ld_branch_function",
+      "source": "src/writer.rs",
+      "operation": "replace_iec_ld_branch_function",
+      "adapter": "replace_iec_ld_branch_function",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_function",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_function",
+      "adapter": "insert_iec_ld_function",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_standalone_function",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_standalone_function",
+      "adapter": "insert_iec_ld_standalone_function",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_iec_ld_function_cell",
+      "source": "src/writer.rs",
+      "operation": "insert_iec_ld_function_cell",
+      "adapter": "insert_iec_ld_function_cell",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_function_cell",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_function_cell",
+      "adapter": "delete_iec_ld_function_cell",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_eq_chain_head",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_eq_chain_head",
+      "adapter": "delete_iec_ld_eq_chain_head",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_heating_chain_head",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_heating_chain_head",
+      "adapter": "delete_iec_ld_heating_chain_head",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_heating_chain_middle",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_heating_chain_middle",
+      "adapter": "delete_iec_ld_heating_chain_middle",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_heating_chain_x15_eq",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_heating_chain_x15_eq",
+      "adapter": "delete_iec_ld_heating_chain_x15_eq",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_heating_chain_contact_eq",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_heating_chain_contact_eq",
+      "adapter": "delete_iec_ld_heating_chain_contact_eq",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_heating_chain_x3_eq_repaired",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_heating_chain_x3_eq_repaired",
+      "adapter": "delete_iec_ld_heating_chain_x3_eq_repaired",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_heating_chain_x3_eq",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_heating_chain_x3_eq",
+      "adapter": "delete_iec_ld_heating_chain_x3_eq",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "repair_iec_ld_heating_chain_x3_eq_deletion",
+      "source": "src/writer.rs",
+      "operation": "repair_iec_ld_heating_chain_x3_eq_deletion",
+      "adapter": "repair_iec_ld_heating_chain_x3_eq_deletion",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_connected_arithmetic",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_connected_arithmetic",
+      "adapter": "delete_iec_ld_connected_arithmetic",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_iec_ld_branched_arithmetic",
+      "source": "src/writer.rs",
+      "operation": "delete_iec_ld_branched_arithmetic",
+      "adapter": "delete_iec_ld_branched_arithmetic",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_iec_ld_arithmetic_function",
+      "source": "src/writer.rs",
+      "operation": "update_iec_ld_arithmetic_function",
+      "adapter": "update_iec_ld_arithmetic_function",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "update_iec_ld_comparison_function",
+      "source": "src/writer.rs",
+      "operation": "update_iec_ld_comparison_function",
+      "adapter": "update_iec_ld_comparison_function",
+      "subsystem": "iec_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_ladder_cell",
+      "source": "src/writer.rs",
+      "operation": "edit_ladder_cell",
+      "adapter": "edit_ladder_cell",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_ladder_instruction",
+      "source": "src/writer.rs",
+      "operation": "insert_ladder_instruction",
+      "adapter": "insert_ladder_instruction",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_ladder_comparison",
+      "source": "src/writer.rs",
+      "operation": "insert_ladder_comparison",
+      "adapter": "insert_ladder_comparison",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_ladder_comparison",
+      "source": "src/writer.rs",
+      "operation": "delete_ladder_comparison",
+      "adapter": "delete_ladder_comparison",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_ladder_instruction",
+      "source": "src/writer.rs",
+      "operation": "delete_ladder_instruction",
+      "adapter": "delete_ladder_instruction",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_ladder_comment",
+      "source": "src/writer.rs",
+      "operation": "edit_ladder_comment",
+      "adapter": "edit_ladder_comment",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_ladder_rung_comment",
+      "source": "src/writer.rs",
+      "operation": "delete_ladder_rung_comment",
+      "adapter": "delete_ladder_rung_comment",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_ladder_branch",
+      "source": "src/writer.rs",
+      "operation": "edit_ladder_branch",
+      "adapter": "edit_ladder_branch",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "insert_ladder_row",
+      "source": "src/writer.rs",
+      "operation": "insert_ladder_row",
+      "adapter": "insert_ladder_row",
+      "subsystem": "xgk_ladder",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "move_program",
+      "source": "src/program_create.rs",
+      "operation": "move_program",
+      "adapter": "move_program",
+      "subsystem": "programs",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "delete_program",
+      "source": "src/program_create.rs",
+      "operation": "delete_program",
+      "adapter": "delete_program",
+      "subsystem": "programs",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "create_program",
+      "source": "src/program_create.rs",
+      "operation": "create_program",
+      "adapter": "create_program",
+      "subsystem": "programs",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_cnet_settings",
+      "source": "src/cnet_write.rs",
+      "operation": "edit_cnet_settings",
+      "adapter": "edit_cnet_settings",
+      "subsystem": "networks",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_sfc_entity",
+      "source": "src/sfc.rs",
+      "operation": "edit_sfc_entity",
+      "adapter": "edit_sfc_entity",
+      "subsystem": "sfc",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "replace_sfc_sequence",
+      "source": "src/sfc.rs",
+      "operation": "replace_sfc_sequence",
+      "adapter": "replace_sfc_sequence",
+      "subsystem": "sfc",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "edit_sfc_variable",
+      "source": "src/sfc.rs",
+      "operation": "edit_sfc_variable",
+      "adapter": "edit_sfc_variable",
+      "subsystem": "sfc",
+      "compatibility_defaults": {}
+    },
+    {
+      "public_writer": "rename_project",
+      "source": "src/writer.rs",
+      "operation": "rename_project",
+      "adapter": "rename_project",
+      "subsystem": "programs",
+      "compatibility_defaults": {}
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+/target/
+/samples/
+*.xgwx-mcp.lock
+*.xgwx-mcp-backup-*
+__pycache__/

@@ -1,0 +1,55 @@
+---
+name: xgwx-edit
+description: Inspect and edit local LS XG5000 .xgwx projects through the xgwx-mcp server, including programs, symbols, ladder, hardware, networks, and SFC charts.
+---
+
+# XGWX editing
+
+Use the configured `xgwx-mcp` tools for supported local project edits. Each successful changed `apply_edits` or `apply_patch` request immediately saves the source and retains an adjacent backup. The skill folder is portable; its references require no sibling repository. A stdio MCP connection to the server must already be available.
+
+## Inspect, discover, edit
+
+1. Call `inspect_file` with `path` and `section:"overview"` to obtain `revision` and identify the CPU/project. Paths are absolute or relative to the server's startup directory and must resolve inside an allowed root.
+2. Inspect the target subsystem. `programs` identifies document-order program indices and object identities. For program detail or `program.*` sections, supply `program_index`. SFC entities/rows use targeted `sfc.block.<numeric block index>` and declarations use `sfc.variables`, both with `program_index`. Arrays use `{items,total,offset,limit,next_offset}`; collect complete pages at one revision when constructing an expected snapshot.
+3. Call `list_operations` with a relevant `query` or `subsystem`, then `describe_operation` for the selected name. Use its exact schema, constraints, inspection requirements, and examples. Fixture-verified examples include setup operations and source hashes; replace fixture-specific positions/identities using actual inspection. Arguments use Rust method names in snake_case; preserve nested `patch` or `edit` names. Compatibility aliases share their documented handler.
+4. Prepare `apply_edits` with `path`, the inspected `expected_revision`, and ordered `operations:[{name,args}]`. Copy offsets, positions, identities, and expected values from inspection. Preserve all expected-value checks. Use `dry_run:true` when a preview is useful.
+5. Save with `dry_run:false` using the original inspected revision. Report the returned revision, changed status, backup path, and validation. Re-inspect after structural changes before preparing edits that depend on moved indices or offsets.
+
+Dry-run uses the same editing and verification pipeline without saving files or creating backups; its `revision_after` belongs to the candidate. A no-op creates no backup. An error aborts the entire request without changing source bytes. If the revision is stale, inspect again and rebuild the edit from current data. Do not merely replace the hash on an old request.
+
+Cooperating server saves use a persistent `.xgwx-mcp.lock` sidecar. Coordinate simultaneous edits with XG5000 or other programs that ignore the advisory lock; the revision recheck can detect changes but does not lock those programs.
+
+Use `validate_file(path)` to report container verification and available decoded-program diagnostics separately. When the library rejects a format, topology, type, or edit site, report its precise reason and retain the source. If a later save failure returns `error.backup_path`, report the retained recovery artifact. Do not bypass restrictions with raw XML/binary rewriting or weaken expected-value checks. Backup retention does not authorize automatic deletion or rollback.
+
+## New project files
+
+Use `list_templates()` then `create_file(path, project_name?, cpu_model?, program_language?, program_name?, operations?, dry_run?)` for a new `.xgwx` file. Read [create-file.md](references/create-file.md) first. Preview without disk changes; save only to an absent destination in an existing allowed directory. Choose the project name, destination, CPU and LD/SFC program language from advertised creation_choices; the seed is derived automatically. Unsupported combinations are rejected. Omitted names retain defaults; seed identities and CPU migration guards are preserved. Inspect the created revision before further edits; later changed edits create normal backups. `create_program` adds a program to an existing file.
+
+## Focused discovery and property patches
+
+Use `list_modules`, `list_module_catalog`, `list_variables` and `list_networks`
+for focused discovery. Read [property-patches.md](references/property-patches.md),
+then export with `get_ir(section:"modules"|"variables"|"networks")`. List responses
+are not patch text. Edit only marked properties; preserve readonly identities,
+field order, scalar types and the exported revision. Use `apply_patch` with the
+same section and optional variable program selection. Model replacement and
+structural objects remain direct operations; IEC local rename/type changes must
+be the sole mutation followed by renewed export. Native acceptance stays separate.
+
+## Positional program text patches
+
+For supported SFC linear row insertion/deletion/reordering and row fields, direct entity comments/conditions and declaration descriptions, as well as contact/coil creation/deletion and edits, XGK catalog instruction/comparison creation/deletion and mnemonic/operand edits, physical-wire deletion/vertical creation, bound IEC function operand and captured arithmetic/comparison name edits, native comment, and symbol-description changes, use `get_ir(path, program_index)` and patch its returned text with an exact unified diff through `apply_patch`. Read [text-ir.md](references/text-ir.md) for native XGK/IEC positions, syntax, creation/deletion limits, and comments. XGK output column 9 uses native x=94. New objects use fresh @new-<name> identities; retained source identities and positions stay fixed. Keep the exported revision, identities, positions and read-only derived connections; the server derives expected values and offsets. Instruction creation/deletion/arity changes, connected IEC contact/terminal-coil deletion and wire changes each require a patch with exactly one mutation. SFC row changes target one chart and must be the only writer operation. Read [sfc.md](references/sfc.md#positional-text-patches) before editing SFC text. Re-export after saving, especially after chart replacement, wire or structural comment edits.
+
+## Focused references
+
+- For a specific XGK/XGB instruction, find its individual file through [instructions/index.md](references/instructions/index.md). The portable helper `scripts/find_instruction.py "TON"` returns the exact guide and writer route; `--query "timer"` searches reviewed purposes and aliases. Load only that instruction's file. Manual spellings, native writer mnemonics, reviewed operands, and known source errors are recorded separately. Korean source notes and figures retain behavior that has not been translated; catalog-only entries identify missing manual coverage.
+- For metadata, create/delete/reorder, globals, and IEC local symbols, read [programs-and-symbols.md](references/programs-and-symbols.md).
+- For XGK/IEC cells, contacts, coils, functions, wires, rows, and groups, read [ladder.md](references/ladder.md).
+- For CPU models, module placement/options, and Cnet/FEnet settings, read [hardware-and-networks.md](references/hardware-and-networks.md).
+- For SFC entities, complete sequences, branches/actions, and declarations, read [sfc.md](references/sfc.md).
+
+## Native acceptance
+
+Distinguish container verification, decoded-program diagnostics, and native acceptance in the result. Some supported edits intentionally leave incomplete circuits or charts; successful serialization does not establish executable program validity.
+
+Native acceptance requires XG5000 Open → inspect the changed area → Check Program → Save As to a separate file → inspect/compare the resave. Record native errors/warnings and compare relevant decoded payloads/metadata plus unrelated retained sections. If this was not performed, say that native acceptance remains unverified. Do not infer acceptance from local parsing or IL generation. This skill does not authorize PLC communication, deployment, client configuration changes, or unrelated files.

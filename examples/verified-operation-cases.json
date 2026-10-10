@@ -1,0 +1,562 @@
+{
+  "version": 1,
+  "note": "Executable local fixture workflows. Inspect actual projects and replace fixture-specific identities, coordinates, values and revisions. Native XG5000 acceptance is not established.",
+  "cases": [
+    {
+      "id": "xgk-elements-and-comments",
+      "fixture": "empty-projects/new-xgk.xgwx",
+      "preserve_programs": [
+        0
+      ],
+      "setup": [
+        {
+          "name": "create_program",
+          "args": {
+            "patch": {
+              "name": "FixtureEdits",
+              "language": "LD",
+              "object_id": "abcdef01-1234-4567-89ab-0123456789ab",
+              "symbol_id": "bbcdef01-1234-4567-89ab-0123456789ab"
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "name": "edit_ladder_cell",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "raw_y": 0,
+              "column": 0,
+              "expected": null,
+              "replacement": {
+                "kind": "NormallyOpen",
+                "operand": "M00000"
+              }
+            }
+          }
+        },
+        {
+          "name": "edit_ladder_cell",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "raw_y": 0,
+              "column": 9,
+              "expected": null,
+              "replacement": {
+                "kind": "Output",
+                "operand": "M00001"
+              }
+            }
+          }
+        },
+        {
+          "name": "edit_ladder_cell",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "raw_y": 0,
+              "column": 0,
+              "expected": {
+                "kind": "NormallyOpen",
+                "operand": "M00000"
+              },
+              "replacement": {
+                "kind": "NormallyClosed",
+                "operand": "M00002"
+              }
+            }
+          }
+        },
+        {
+          "name": "edit_ladder_comment",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "kind": "Output",
+              "raw_y": 0,
+              "expected": null,
+              "replacement": "Relay command"
+            }
+          }
+        },
+        {
+          "name": "edit_ladder_comment",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "kind": "Output",
+              "raw_y": 0,
+              "expected": "Relay command",
+              "replacement": "Relay command verified"
+            }
+          }
+        },
+        {
+          "name": "edit_ladder_comment",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "kind": "Rung",
+              "raw_y": 0,
+              "expected": null,
+              "replacement": "Before rung"
+            }
+          }
+        },
+        {
+          "name": "edit_ladder_comment",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "kind": "Rung",
+              "raw_y": 0,
+              "expected": "Before rung",
+              "replacement": "New rung note"
+            }
+          }
+        },
+        {
+          "name": "delete_ladder_rung_comment",
+          "args": {
+            "program_index": 1,
+            "raw_y": 0,
+            "expected": "New rung note"
+          }
+        },
+        {
+          "name": "edit_ladder_cell",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "raw_y": 0,
+              "column": 0,
+              "expected": {
+                "kind": "NormallyClosed",
+                "operand": "M00002"
+              },
+              "replacement": null
+            }
+          }
+        },
+        {
+          "name": "edit_ladder_cell",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "raw_y": 0,
+              "column": 9,
+              "expected": {
+                "kind": "Output",
+                "operand": "M00001"
+              },
+              "replacement": null
+            }
+          }
+        }
+      ],
+      "expect": {
+        "program_index": 1,
+        "cell_count": 0,
+        "rung_comment_count": 0,
+        "output_comments": [
+          "Relay command verified"
+        ]
+      },
+      "fixture_sha256": "168296bd4049aff9edc6c75eeffd005ba108d9a5bf2686f0a959bf7401279c06"
+    },
+    {
+      "id": "xgk-rows-and-branches",
+      "fixture": "empty-projects/new-xgk.xgwx",
+      "preserve_programs": [
+        0
+      ],
+      "setup": [
+        {
+          "name": "create_program",
+          "args": {
+            "patch": {
+              "name": "FixtureBranch",
+              "language": "LD",
+              "object_id": "abcdef01-1234-4567-89ab-0123456789ab",
+              "symbol_id": "bbcdef01-1234-4567-89ab-0123456789ab"
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "name": "edit_ladder_cell",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "raw_y": 0,
+              "column": 0,
+              "expected": null,
+              "replacement": {
+                "kind": "NormallyOpen",
+                "operand": "M00000"
+              }
+            }
+          }
+        },
+        {
+          "name": "edit_ladder_cell",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "raw_y": 0,
+              "column": 9,
+              "expected": null,
+              "replacement": {
+                "kind": "Output",
+                "operand": "M00001"
+              }
+            }
+          }
+        },
+        {
+          "name": "insert_ladder_row",
+          "args": {
+            "program_index": 1,
+            "raw_y": 0
+          }
+        },
+        {
+          "name": "edit_ladder_cell",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "raw_y": 0,
+              "column": 0,
+              "expected": null,
+              "replacement": {
+                "kind": "NormallyOpen",
+                "operand": "M00002"
+              }
+            }
+          }
+        },
+        {
+          "name": "edit_ladder_cell",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "raw_y": 0,
+              "column": 9,
+              "expected": null,
+              "replacement": {
+                "kind": "Output",
+                "operand": "M00003"
+              }
+            }
+          }
+        },
+        {
+          "name": "edit_ladder_branch",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "raw_y": 0,
+              "boundary": 1,
+              "expected": false,
+              "present": true
+            }
+          }
+        },
+        {
+          "name": "edit_ladder_branch",
+          "args": {
+            "program_index": 1,
+            "edit": {
+              "raw_y": 0,
+              "boundary": 1,
+              "expected": true,
+              "present": false
+            }
+          }
+        }
+      ],
+      "expect": {
+        "program_index": 1,
+        "cell_count": 4,
+        "vertical_line_count": 0
+      },
+      "fixture_sha256": "168296bd4049aff9edc6c75eeffd005ba108d9a5bf2686f0a959bf7401279c06"
+    },
+    {
+      "id": "xgk-application-and-comparison",
+      "fixture": "empty-projects/new-xgk.xgwx",
+      "preserve_programs": [
+        0
+      ],
+      "setup": [
+        {
+          "name": "create_program",
+          "args": {
+            "patch": {
+              "name": "FixtureFunctions",
+              "language": "LD",
+              "object_id": "abcdef01-1234-4567-89ab-0123456789ab",
+              "symbol_id": "bbcdef01-1234-4567-89ab-0123456789ab"
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "name": "insert_ladder_comparison",
+          "args": {
+            "program_index": 1,
+            "raw_y": 0,
+            "column": 0,
+            "mnemonic": "=",
+            "operands": [
+              "D100",
+              "D102"
+            ]
+          }
+        },
+        {
+          "name": "insert_ladder_instruction",
+          "args": {
+            "program_index": 1,
+            "raw_y": 0,
+            "mnemonic": "MOV",
+            "operands": [
+              "0",
+              "D104"
+            ]
+          }
+        }
+      ],
+      "expect": {
+        "program_index": 1,
+        "instruction_values": [
+          "MOV,0,D104"
+        ],
+        "comparison_value": "=,D100,D102"
+      },
+      "fixture_sha256": "168296bd4049aff9edc6c75eeffd005ba108d9a5bf2686f0a959bf7401279c06"
+    },
+    {
+      "id": "program-lifecycle",
+      "fixture": "empty-projects/new-xgk.xgwx",
+      "preserve_programs": [
+        0
+      ],
+      "setup": [],
+      "operations": [
+        {
+          "name": "create_program",
+          "args": {
+            "patch": {
+              "name": "FixtureFirst",
+              "language": "LD",
+              "object_id": "abcdef01-1234-4567-89ab-0123456789ab",
+              "symbol_id": "bbcdef01-1234-4567-89ab-0123456789ab"
+            }
+          }
+        },
+        {
+          "name": "create_program",
+          "args": {
+            "patch": {
+              "name": "FixtureSecond",
+              "language": "LD",
+              "object_id": "abcdef02-1234-4567-89ab-0123456789ab",
+              "symbol_id": "bbcdef02-1234-4567-89ab-0123456789ab"
+            }
+          }
+        },
+        {
+          "name": "update_program",
+          "args": {
+            "program_index": 1,
+            "patch": {
+              "comment": "Fixture metadata"
+            }
+          }
+        },
+        {
+          "name": "move_program",
+          "args": {
+            "from": 1,
+            "to": 2,
+            "expected_object_id": "abcdef01-1234-4567-89ab-0123456789ab",
+            "expected_target_id": "abcdef02-1234-4567-89ab-0123456789ab"
+          }
+        },
+        {
+          "name": "delete_program",
+          "args": {
+            "program_index": 2,
+            "expected_object_id": "abcdef01-1234-4567-89ab-0123456789ab"
+          }
+        }
+      ],
+      "expect": {
+        "program_count": 2,
+        "last_program_name": "FixtureSecond"
+      },
+      "fixture_sha256": "168296bd4049aff9edc6c75eeffd005ba108d9a5bf2686f0a959bf7401279c06"
+    },
+    {
+      "id": "hardware-input-filter",
+      "fixture": "empty-projects/new-xgk.xgwx",
+      "preserve_programs": [
+        0
+      ],
+      "setup": [],
+      "operations": [
+        {
+          "name": "insert_module",
+          "args": {
+            "base": 0,
+            "slot": 0,
+            "model": "XGI-D24A/B"
+          }
+        },
+        {
+          "name": "update_module",
+          "args": {
+            "base": 0,
+            "slot": 0,
+            "patch": {
+              "comment": "Fixture input module"
+            }
+          }
+        },
+        {
+          "name": "set_module_input_filter",
+          "args": {
+            "base": 0,
+            "slot": 0,
+            "filter": "Ms5"
+          }
+        },
+        {
+          "name": "set_base_slot_count",
+          "args": {
+            "base": 0,
+            "slot_count": 6
+          }
+        }
+      ],
+      "expect": {
+        "module_comment": "Fixture input module"
+      },
+      "fixture_sha256": "168296bd4049aff9edc6c75eeffd005ba108d9a5bf2686f0a959bf7401279c06"
+    },
+    {
+      "id": "iec-isolated-elements",
+      "fixture": "empty-projects/new-xgi.xgwx",
+      "preserve_programs": [],
+      "setup": [],
+      "operations": [
+        {
+          "name": "insert_iec_ld_single_element",
+          "args": {
+            "program_index": 0,
+            "row_index": 0,
+            "raw_x": 1,
+            "category": "contact",
+            "kind": "NO",
+            "operand": "%MX0"
+          }
+        },
+        {
+          "name": "insert_iec_ld_single_element",
+          "args": {
+            "program_index": 0,
+            "row_index": 0,
+            "raw_x": 94,
+            "category": "coil",
+            "kind": "OUTPUT",
+            "operand": "%MX1"
+          }
+        }
+      ],
+      "expect": {
+        "program_index": 0,
+        "iec_contact_count": 1,
+        "iec_coil_count": 1
+      },
+      "fixture_sha256": "d738e4625a838d8a1954b50512fddbcb0fa40e89b56ac04fa9d9a593745d63c7"
+    },
+    {
+      "id": "fenet-network",
+      "fixture": "empty-projects/new-xgk.xgwx",
+      "setup": [],
+      "preserve_programs": [
+        0
+      ],
+      "operations": [
+        {
+          "name": "insert_module",
+          "args": {
+            "base": 0,
+            "slot": 0,
+            "model": "XGL-EFMT(B)"
+          }
+        },
+        {
+          "name": "edit_fenet_field",
+          "args": {
+            "patch": {
+              "base": 0,
+              "slot": 0,
+              "field": "ipAddress",
+              "expected_value": "192.168.0.100",
+              "replacement": "10.20.30.40"
+            }
+          }
+        },
+        {
+          "name": "update_network",
+          "args": {
+            "network_index": 0,
+            "patch": {
+              "name": "Fixture network"
+            }
+          }
+        }
+      ],
+      "expect": {
+        "fenet_ip": "10.20.30.40",
+        "network_name": "Fixture network"
+      },
+      "fixture_sha256": "168296bd4049aff9edc6c75eeffd005ba108d9a5bf2686f0a959bf7401279c06"
+    },
+    {
+      "id": "sfc-native-step-comment",
+      "fixture": "sfc/native-loop.xgwx",
+      "setup": [],
+      "preserve_programs": [],
+      "operations": [
+        {
+          "name": "edit_sfc_entity",
+          "args": {
+            "patch": {
+              "program_index": 0,
+              "block_index": 0,
+              "entity_index": 3,
+              "expected_type": 0,
+              "expected_row": 3,
+              "expected_column": 0,
+              "field": "comment",
+              "expected_value": "Ready for cycle",
+              "replacement": "Fixture chart comment"
+            }
+          }
+        }
+      ],
+      "expect": {
+        "sfc_step_comment": "Fixture chart comment"
+      },
+      "fixture_sha256": "361ae4082c2e7b73d2af06e0688fb1ccac83ac53cff0e43c17bd2a012cc58c3e"
+    }
+  ]
+}
