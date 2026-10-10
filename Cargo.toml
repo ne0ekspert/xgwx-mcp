@@ -3,7 +3,7 @@ name = "xgwx-mcp"
 version = "0.1.0"
 edition = "2024"
 description = "Local MCP server for loss-preserving XGWX inspection and editing"
-license = "Apache-2.0"
+license = "GPL-3.0-only"
 
 [dependencies]
 xgwx = { package = "libxgwx", path = "../libxgwx", features = ["write", "il"] }

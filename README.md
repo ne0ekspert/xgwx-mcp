@@ -150,3 +150,7 @@ metadata-bearing layouts remain read-only. Local validation reports decoding and
 container checks; syntax/type compilation requires native XG5000 Check Program.
 
 XGK IL uses `edit_vendor_il` and `inspect_file(section:"vendor_il")`; it rebuilds the selected ladder payload and retains guarded straight-line/catalog limits. Its creation profile is `xgk_il` with native LD storage.
+
+## License
+
+Licensed under GNU GPL version 3 (`GPL-3.0-only`). See [LICENSE](LICENSE) for the full terms.
