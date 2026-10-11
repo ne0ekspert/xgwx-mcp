@@ -1,5 +1,3 @@
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use crate::library_compat::DocumentNamespacesCompat;
 use fs2::FileExt;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -224,19 +222,11 @@ impl FileStore {
                     "program name must be nonblank and contain no control characters",
                 ));
             }
-            #[cfg(feature = "libxgwx-namespaced-api")]
             let renamed = doc
                 .program_mut()
                 .get(0)
                 .and_then(|mut program| program.rename(name));
-            #[cfg(not(feature = "libxgwx-namespaced-api"))]
-            let renamed = doc.program_mut().update_program(
-                0,
-                &xgwx::ProgramPatch {
-                    name: Some(name.clone()),
-                    ..Default::default()
-                },
-            );
+
             renamed.map_err(|e| StoreError::new("invalid_program_name", e))?;
         }
         let mut results = vec![];

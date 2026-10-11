@@ -1,7 +1,6 @@
 //! Revision-scoped, positional ladder projection. The original document remains
 //! the source of truth; this IR is lowered only through public guarded writers.
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use crate::library_compat::DocumentNamespacesCompat;
+
 use crate::storage::{EditOperation, StoreError};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -493,14 +492,12 @@ impl Projection {
             // The text writer has a legacy raw-string fallback for undecoded layouts.
             // A structural writer on a disposable clone proves the whole payload uses
             // the same native parser before exposing complete instruction updates.
-            #[cfg(feature = "libxgwx-namespaced-api")]
             let instruction_probe = doc
                 .clone()
                 .program_mut()
                 .get(index)
                 .and_then(|mut program| program.ladder()?.insert_row(0));
-            #[cfg(not(feature = "libxgwx-namespaced-api"))]
-            let instruction_probe = doc.clone().program_mut().insert_ladder_row(index, 0);
+
             let instruction_layout = instruction_probe.is_ok();
             if let Err(reason) = instruction_probe {
                 text.push_str(&format!(

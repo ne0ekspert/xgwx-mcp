@@ -1,26 +1,11 @@
 //! Public writer discovery and strict, typed operation adapters.
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use crate::library_compat::DocumentNamespacesCompat;
+
 use crate::operation_types::*;
 use schemars::{JsonSchema, schema_for};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use xgwx::XgwxDocument;
-
-// The wire operations keep their guard fields and coordinates across Git baselines.
-macro_rules! current_api {
-    ($current:expr, $pinned:expr) => {{
-        #[cfg(feature = "libxgwx-namespaced-api")]
-        {
-            $current
-        }
-        #[cfg(not(feature = "libxgwx-namespaced-api"))]
-        {
-            $pinned
-        }
-    }};
-}
 
 pub struct OperationDefinition {
     pub name: &'static str,
@@ -49,27 +34,24 @@ fn example_edit_vendor_il() -> Value {
 }
 fn apply_edit_vendor_il(doc: &mut XgwxDocument, args: Value) -> Result<(), String> {
     let args: EditVendorIlArgs = parse_args("edit_vendor_il", args)?;
-    current_api!(
-        {
-            let patch: xgwx::VendorIlPatch = args.patch.clone().into();
-            doc.program_mut()
-                .get(patch.program_index)
-                .and_then(|mut program| {
-                    if program.object_id() != patch.expected_object_id
-                        || patch.expected_object_id.is_empty()
-                    {
-                        return Err(xgwx::XgwxError::TextProgramEdit(
-                            "program identity changed; reload before applying".into(),
-                        ));
-                    }
-                    program.vendor_il()?.update(&xgwx::VendorIlSourcePatch {
-                        expected_source: patch.expected_source,
-                        source: patch.source,
-                    })
+    {
+        let patch: xgwx::VendorIlPatch = args.patch.clone().into();
+        doc.program_mut()
+            .get(patch.program_index)
+            .and_then(|mut program| {
+                if program.object_id() != patch.expected_object_id
+                    || patch.expected_object_id.is_empty()
+                {
+                    return Err(xgwx::XgwxError::TextProgramEdit(
+                        "program identity changed; reload before applying".into(),
+                    ));
+                }
+                program.vendor_il()?.update(&xgwx::VendorIlSourcePatch {
+                    expected_source: patch.expected_source,
+                    source: patch.source,
                 })
-        },
-        doc.program_mut().edit_vendor_il(&args.patch.into())
-    )
+            })
+    }
     .map_err(|e| e.to_string())
 }
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -85,32 +67,29 @@ fn example_edit_text_program() -> Value {
 }
 fn apply_edit_text_program(doc: &mut XgwxDocument, args: Value) -> Result<(), String> {
     let args: EditTextProgramArgs = parse_args("edit_text_program", args)?;
-    current_api!(
-        {
-            let patch: xgwx::TextProgramPatch = args.patch.clone().into();
-            doc.program_mut()
-                .get(patch.program_index)
-                .and_then(|mut program| {
-                    if program.object_id() != patch.expected_object_id
-                        || patch.expected_object_id.is_empty()
-                    {
-                        return Err(xgwx::XgwxError::TextProgramEdit(
-                            "program identity changed; reload before applying".into(),
-                        ));
-                    }
-                    if program.view().text()?.language != patch.expected_language {
-                        return Err(xgwx::XgwxError::TextProgramEdit(
-                            "program language changed; reload before applying".into(),
-                        ));
-                    }
-                    program.text()?.update(&xgwx::TextSourcePatch {
-                        expected_source: patch.expected_source,
-                        source: patch.source,
-                    })
+    {
+        let patch: xgwx::TextProgramPatch = args.patch.clone().into();
+        doc.program_mut()
+            .get(patch.program_index)
+            .and_then(|mut program| {
+                if program.object_id() != patch.expected_object_id
+                    || patch.expected_object_id.is_empty()
+                {
+                    return Err(xgwx::XgwxError::TextProgramEdit(
+                        "program identity changed; reload before applying".into(),
+                    ));
+                }
+                if program.view().text()?.language != patch.expected_language {
+                    return Err(xgwx::XgwxError::TextProgramEdit(
+                        "program language changed; reload before applying".into(),
+                    ));
+                }
+                program.text()?.update(&xgwx::TextSourcePatch {
+                    expected_source: patch.expected_source,
+                    source: patch.source,
                 })
-        },
-        doc.program_mut().edit_text_program(&args.patch.into())
-    )
+            })
+    }
     .map_err(|e| e.to_string())
 }
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -127,36 +106,32 @@ fn example_edit_text_variable() -> Value {
 }
 fn apply_edit_text_variable(doc: &mut XgwxDocument, args: Value) -> Result<(), String> {
     let args: EditTextVariableArgs = parse_args("edit_text_variable", args)?;
-    current_api!(
-        {
-            let patch: xgwx::SfcVariablePatch = args.patch.clone().into();
-            doc.program_mut()
-                .get(patch.program_index)
-                .and_then(|mut program| {
-                    if program.object_id() != args.expected_object_id
-                        || args.expected_object_id.is_empty()
-                    {
-                        return Err(xgwx::XgwxError::TextProgramEdit(
-                            "program identity changed; reload before applying".into(),
-                        ));
-                    }
-                    program.view().text()?;
-                    program
-                        .variable_mut()
-                        .edit_declaration(&xgwx::ProgramVariablePatch {
-                            expected_variables: patch.expected_variables,
-                            name: patch.name,
-                            data_type: patch.data_type,
-                            description: patch.description,
-                            remove: patch.remove,
-                            declaration: patch.declaration,
-                            update: patch.update,
-                        })
-                })
-        },
-        doc.variable_mut()
-            .edit_text_variable(&args.expected_object_id, &args.patch.into())
-    )
+    {
+        let patch: xgwx::SfcVariablePatch = args.patch.clone().into();
+        doc.program_mut()
+            .get(patch.program_index)
+            .and_then(|mut program| {
+                if program.object_id() != args.expected_object_id
+                    || args.expected_object_id.is_empty()
+                {
+                    return Err(xgwx::XgwxError::TextProgramEdit(
+                        "program identity changed; reload before applying".into(),
+                    ));
+                }
+                program.view().text()?;
+                program
+                    .variable_mut()
+                    .edit_declaration(&xgwx::ProgramVariablePatch {
+                        expected_variables: patch.expected_variables,
+                        name: patch.name,
+                        data_type: patch.data_type,
+                        description: patch.description,
+                        remove: patch.remove,
+                        declaration: patch.declaration,
+                        update: patch.update,
+                    })
+            })
+    }
     .map_err(|e| e.to_string())
 }
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -480,14 +455,10 @@ fn execute_edit_browser_iec(
     doc: &mut XgwxDocument,
     args: &EditBrowserIecArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.index)
-            .and_then(|mut program| program.iec_ld()?.edit_browser(&args.patch.clone().into())),
-        doc.program_mut()
-            .edit_browser_iec(args.index, &args.patch.clone().into())
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.index)
+        .and_then(|mut program| program.iec_ld()?.edit_browser(&args.patch.clone().into()))
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -529,14 +500,10 @@ fn apply_update_program(doc: &mut XgwxDocument, args: Value) -> Result<(), Strin
 }
 
 fn execute_update_program(doc: &mut XgwxDocument, args: &UpdateProgramArgs) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.update(&args.patch.clone().into())),
-        doc.program_mut()
-            .update_program(args.program_index, &args.patch.clone().into())
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| program.update(&args.patch.clone().into()))
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -681,24 +648,17 @@ fn execute_update_iec_local_symbol_address(
     doc: &mut XgwxDocument,
     args: &UpdateIecLocalSymbolAddressArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.variable_mut().update_address(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.variable_mut().update_address(
                 args.symbol_index,
                 &args.expected_name,
                 &args.expected_address,
-                &args.replacement
-            )),
-        doc.variable_mut().update_iec_local_symbol_address(
-            args.program_index,
-            args.symbol_index,
-            &args.expected_name,
-            &args.expected_address,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.replacement,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -728,22 +688,14 @@ fn execute_rename_iec_local_symbol(
     doc: &mut XgwxDocument,
     args: &RenameIecLocalSymbolArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.variable_mut().rename(
-                args.symbol_index,
-                &args.expected_name,
-                &args.replacement
-            )),
-        doc.variable_mut().rename_iec_local_symbol(
-            args.program_index,
-            args.symbol_index,
-            &args.expected_name,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
+                .variable_mut()
+                .rename(args.symbol_index, &args.expected_name, &args.replacement)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -777,22 +729,16 @@ fn execute_duplicate_iec_ld_function_instance(
     doc: &mut XgwxDocument,
     args: &DuplicateIecLdFunctionInstanceArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.duplicate_function_instance(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.duplicate_function_instance(
                 args.block_offset,
                 &args.expected_instance,
-                &args.new_instance
-            )),
-        doc.program_mut().duplicate_iec_ld_function_instance(
-            args.program_index,
-            args.block_offset,
-            &args.expected_instance,
-            &args.new_instance,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.new_instance,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -826,24 +772,16 @@ fn execute_copy_iec_instance_declaration_to_program(
     doc: &mut XgwxDocument,
     args: &CopyIecInstanceDeclarationToProgramArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.source_program_index)
-            .and_then(
-                |mut program| program.variable_mut().copy_instance_to_program(
-                    &args.source_instance,
-                    args.destination_program_index,
-                    &args.new_instance
-                )
-            ),
-        doc.variable_mut().copy_iec_instance_declaration_to_program(
-            args.source_program_index,
-            &args.source_instance,
-            args.destination_program_index,
-            &args.new_instance,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.source_program_index)
+        .and_then(|mut program| {
+            program.variable_mut().copy_instance_to_program(
+                &args.source_instance,
+                args.destination_program_index,
+                &args.new_instance,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -878,24 +816,17 @@ fn execute_update_iec_local_symbol_description(
     doc: &mut XgwxDocument,
     args: &UpdateIecLocalSymbolDescriptionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.variable_mut().update_description(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.variable_mut().update_description(
                 args.symbol_index,
                 &args.expected_name,
                 &args.expected_description,
-                &args.replacement
-            )),
-        doc.variable_mut().update_iec_local_symbol_description(
-            args.program_index,
-            args.symbol_index,
-            &args.expected_name,
-            &args.expected_description,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.replacement,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -925,22 +856,14 @@ fn execute_insert_iec_local_symbol(
     doc: &mut XgwxDocument,
     args: &InsertIecLocalSymbolArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.variable_mut().insert(
-                &args.name,
-                &args.data_type,
-                &args.description
-            )),
-        doc.variable_mut().insert_iec_local_symbol(
-            args.program_index,
-            &args.name,
-            &args.data_type,
-            &args.description,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
+                .variable_mut()
+                .insert(&args.name, &args.data_type, &args.description)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -969,19 +892,14 @@ fn execute_delete_iec_local_symbol(
     doc: &mut XgwxDocument,
     args: &DeleteIecLocalSymbolArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .variable_mut()
-                .delete(args.symbol_index, &args.expected_name)),
-        doc.variable_mut().delete_iec_local_symbol(
-            args.program_index,
-            args.symbol_index,
-            &args.expected_name
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete(args.symbol_index, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1012,24 +930,17 @@ fn execute_update_iec_local_symbol_type(
     doc: &mut XgwxDocument,
     args: &UpdateIecLocalSymbolTypeArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.variable_mut().update_type(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.variable_mut().update_type(
                 args.symbol_index,
                 &args.expected_name,
                 &args.expected_type,
-                &args.replacement
-            )),
-        doc.variable_mut().update_iec_local_symbol_type(
-            args.program_index,
-            args.symbol_index,
-            &args.expected_name,
-            &args.expected_type,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.replacement,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1059,32 +970,20 @@ fn execute_update_ladder_cell_text(
     doc: &mut XgwxDocument,
     args: &UpdateLadderCellTextArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| {
-                if program.view().ladder()?.project_type == Some(1) {
-                    program.ladder()?.update_cell_text(
-                        args.offset,
-                        &args.expected,
-                        &args.replacement,
-                    )
-                } else {
-                    program.iec_ld()?.update_cell_text(
-                        args.offset,
-                        &args.expected,
-                        &args.replacement,
-                    )
-                }
-            }),
-        doc.program_mut().update_ladder_cell_text(
-            args.program_index,
-            args.offset,
-            &args.expected,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            if program.view().ladder()?.project_type == Some(1) {
+                program
+                    .ladder()?
+                    .update_cell_text(args.offset, &args.expected, &args.replacement)
+            } else {
+                program
+                    .iec_ld()?
+                    .update_cell_text(args.offset, &args.expected, &args.replacement)
+            }
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1113,22 +1012,14 @@ fn execute_update_iec_ld_comment(
     doc: &mut XgwxDocument,
     args: &UpdateIecLdCommentArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.update_comment(
-                args.offset,
-                &args.expected,
-                &args.replacement
-            )),
-        doc.program_mut().update_iec_ld_comment(
-            args.program_index,
-            args.offset,
-            &args.expected,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
+                .iec_ld()?
+                .update_comment(args.offset, &args.expected, &args.replacement)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1162,24 +1053,16 @@ fn execute_update_iec_ld_rising_contact_operand(
     doc: &mut XgwxDocument,
     args: &UpdateIecLdRisingContactOperandArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(
-                |mut program| program.iec_ld()?.update_rising_contact_operand(
-                    args.offset,
-                    &args.expected,
-                    &args.replacement
-                )
-            ),
-        doc.program_mut().update_iec_ld_rising_contact_operand(
-            args.program_index,
-            args.offset,
-            &args.expected,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.update_rising_contact_operand(
+                args.offset,
+                &args.expected,
+                &args.replacement,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1209,22 +1092,14 @@ fn execute_update_iec_ld_element_operand(
     doc: &mut XgwxDocument,
     args: &UpdateIecLdElementOperandArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.update_element_operand(
-                args.offset,
-                &args.expected,
-                &args.replacement
-            )),
-        doc.program_mut().update_iec_ld_element_operand(
-            args.program_index,
-            args.offset,
-            &args.expected,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
+                .iec_ld()?
+                .update_element_operand(args.offset, &args.expected, &args.replacement)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1254,22 +1129,14 @@ fn execute_update_iec_ld_contact_kind(
     doc: &mut XgwxDocument,
     args: &UpdateIecLdContactKindArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.update_contact_kind(
-                args.offset,
-                &args.expected,
-                &args.replacement
-            )),
-        doc.program_mut().update_iec_ld_contact_kind(
-            args.program_index,
-            args.offset,
-            &args.expected,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
+                .iec_ld()?
+                .update_contact_kind(args.offset, &args.expected, &args.replacement)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1298,22 +1165,14 @@ fn execute_update_iec_ld_coil_kind(
     doc: &mut XgwxDocument,
     args: &UpdateIecLdCoilKindArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.update_coil_kind(
-                args.offset,
-                &args.expected,
-                &args.replacement
-            )),
-        doc.program_mut().update_iec_ld_coil_kind(
-            args.program_index,
-            args.offset,
-            &args.expected,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
+                .iec_ld()?
+                .update_coil_kind(args.offset, &args.expected, &args.replacement)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1346,28 +1205,19 @@ fn execute_edit_iec_ld_branch_segment(
     doc: &mut XgwxDocument,
     args: &EditIecLdBranchSegmentArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.edit_branch_segment(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.edit_branch_segment(
                 args.group_index,
                 args.start_row_index,
                 args.end_row_index,
                 args.x,
                 args.expected,
-                args.present
-            )),
-        doc.program_mut().edit_iec_ld_branch_segment(
-            args.program_index,
-            args.group_index,
-            args.start_row_index,
-            args.end_row_index,
-            args.x,
-            args.expected,
-            args.present,
-        )
-    )
-    .map_err(|error| error.to_string())
+                args.present,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1400,28 +1250,19 @@ fn execute_edit_iec_ld_vertical_wire(
     doc: &mut XgwxDocument,
     args: &EditIecLdVerticalWireArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.edit_vertical_wire(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.edit_vertical_wire(
                 args.group_index,
                 args.start_row_index,
                 args.end_row_index,
                 args.x,
                 args.expected,
-                args.present
-            )),
-        doc.program_mut().edit_iec_ld_vertical_wire(
-            args.program_index,
-            args.group_index,
-            args.start_row_index,
-            args.end_row_index,
-            args.x,
-            args.expected,
-            args.present,
-        )
-    )
-    .map_err(|error| error.to_string())
+                args.present,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1452,26 +1293,18 @@ fn execute_connect_iec_ld_groups(
     doc: &mut XgwxDocument,
     args: &ConnectIecLdGroupsArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.connect_groups(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.connect_groups(
                 args.upper_group_index,
                 args.expected_upper_row,
                 args.lower_group_index,
                 args.expected_lower_row,
-                args.x
-            )),
-        doc.program_mut().connect_iec_ld_groups(
-            args.program_index,
-            args.upper_group_index,
-            args.expected_upper_row,
-            args.lower_group_index,
-            args.expected_lower_row,
-            args.x,
-        )
-    )
-    .map_err(|error| error.to_string())
+                args.x,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1501,22 +1334,14 @@ fn execute_extend_iec_ld_vertical_wire(
     doc: &mut XgwxDocument,
     args: &ExtendIecLdVerticalWireArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.extend_vertical_wire(
-                args.group_index,
-                args.start_row_index,
-                args.x
-            )),
-        doc.program_mut().extend_iec_ld_vertical_wire(
-            args.program_index,
-            args.group_index,
-            args.start_row_index,
-            args.x,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
+                .iec_ld()?
+                .extend_vertical_wire(args.group_index, args.start_row_index, args.x)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1545,22 +1370,16 @@ fn execute_split_iec_ld_group(
     doc: &mut XgwxDocument,
     args: &SplitIecLdGroupArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.split_group(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.split_group(
                 args.group_index,
                 args.expected_upper_row,
-                args.expected_lower_row
-            )),
-        doc.program_mut().split_iec_ld_group(
-            args.program_index,
-            args.group_index,
-            args.expected_upper_row,
-            args.expected_lower_row,
-        )
-    )
-    .map_err(|error| error.to_string())
+                args.expected_lower_row,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1587,14 +1406,10 @@ fn execute_insert_iec_ld_blank_row(
     doc: &mut XgwxDocument,
     args: &InsertIecLdBlankRowArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_blank_row(args.after_row_index)),
-        doc.program_mut()
-            .insert_iec_ld_blank_row(args.program_index, args.after_row_index)
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| program.iec_ld()?.insert_blank_row(args.after_row_index))
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1671,28 +1486,18 @@ fn execute_insert_iec_ld_parallel_contact_kind(
     doc: &mut XgwxDocument,
     args: &InsertIecLdParallelContactKindArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(
-                |mut program| program.iec_ld()?.insert_parallel_contact_kind(
-                    args.row_index,
-                    &args.expected_contact_variable,
-                    &args.expected_coil_variable,
-                    &args.parallel_kind,
-                    &args.parallel_variable
-                )
-            ),
-        doc.program_mut().insert_iec_ld_parallel_contact_kind(
-            args.program_index,
-            args.row_index,
-            &args.expected_contact_variable,
-            &args.expected_coil_variable,
-            &args.parallel_kind,
-            &args.parallel_variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_parallel_contact_kind(
+                args.row_index,
+                &args.expected_contact_variable,
+                &args.expected_coil_variable,
+                &args.parallel_kind,
+                &args.parallel_variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1719,14 +1524,10 @@ fn execute_delete_iec_ld_blank_row(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdBlankRowArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.delete_blank_row(args.blank_row_index)),
-        doc.program_mut()
-            .delete_iec_ld_blank_row(args.program_index, args.blank_row_index)
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| program.iec_ld()?.delete_blank_row(args.blank_row_index))
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1797,26 +1598,18 @@ fn execute_insert_iec_ld_rung(
     doc: &mut XgwxDocument,
     args: &InsertIecLdRungArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_rung(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_rung(
                 args.blank_row_index,
                 &args.contact_kind,
                 &args.contact_variable,
                 &args.coil_kind,
-                &args.coil_variable
-            )),
-        doc.program_mut().insert_iec_ld_rung(
-            args.program_index,
-            args.blank_row_index,
-            &args.contact_kind,
-            &args.contact_variable,
-            &args.coil_kind,
-            &args.coil_variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.coil_variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1848,26 +1641,18 @@ fn execute_insert_iec_ld_single_element(
     doc: &mut XgwxDocument,
     args: &InsertIecLdSingleElementArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_single_element(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_single_element(
                 args.row_index,
                 args.raw_x,
                 &args.category,
                 &args.kind,
-                &args.operand
-            )),
-        doc.program_mut().insert_iec_ld_single_element(
-            args.program_index,
-            args.row_index,
-            args.raw_x,
-            &args.category,
-            &args.kind,
-            &args.operand,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.operand,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1938,26 +1723,18 @@ fn execute_delete_iec_ld_rung(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdRungArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.delete_rung(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.delete_rung(
                 args.row_index,
                 &args.expected_contact_kind,
                 &args.expected_contact_variable,
                 &args.expected_coil_kind,
-                &args.expected_coil_variable
-            )),
-        doc.program_mut().delete_iec_ld_rung(
-            args.program_index,
-            args.row_index,
-            &args.expected_contact_kind,
-            &args.expected_contact_variable,
-            &args.expected_coil_kind,
-            &args.expected_coil_variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.expected_coil_variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -1986,19 +1763,14 @@ fn execute_delete_iec_ld_terminal_coil(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdTerminalCoilArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_terminal_coil(args.coil_record_offset, &args.expected_variable)),
-        doc.program_mut().delete_iec_ld_terminal_coil(
-            args.program_index,
-            args.coil_record_offset,
-            &args.expected_variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_terminal_coil(args.coil_record_offset, &args.expected_variable)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2029,24 +1801,17 @@ fn execute_insert_iec_ld_terminal_coil(
     doc: &mut XgwxDocument,
     args: &InsertIecLdTerminalCoilArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_terminal_coil(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_terminal_coil(
                 args.contact_record_offset,
                 &args.expected_contact_variable,
                 &args.coil_kind,
-                &args.coil_variable
-            )),
-        doc.program_mut().insert_iec_ld_terminal_coil(
-            args.program_index,
-            args.contact_record_offset,
-            &args.expected_contact_variable,
-            &args.coil_kind,
-            &args.coil_variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.coil_variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2078,26 +1843,18 @@ fn execute_delete_iec_ld_simple_row(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdSimpleRowArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.delete_simple_row(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.delete_simple_row(
                 args.row_index,
                 &args.expected_contact_kind,
                 &args.expected_contact_variable,
                 &args.expected_coil_kind,
-                &args.expected_coil_variable
-            )),
-        doc.program_mut().delete_iec_ld_simple_row(
-            args.program_index,
-            args.row_index,
-            &args.expected_contact_kind,
-            &args.expected_contact_variable,
-            &args.expected_coil_kind,
-            &args.expected_coil_variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.expected_coil_variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2126,19 +1883,14 @@ fn execute_delete_iec_ld_branch_top_row(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdBranchTopRowArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_branch_top_row(args.group_index, args.row_index)),
-        doc.program_mut().delete_iec_ld_branch_top_row(
-            args.program_index,
-            args.group_index,
-            args.row_index
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_branch_top_row(args.group_index, args.row_index)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2171,19 +1923,14 @@ fn execute_delete_iec_ld_nested_contact_branch_row(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdNestedContactBranchRowArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_nested_contact_branch_row(args.group_index, args.row_index)),
-        doc.program_mut().delete_iec_ld_nested_contact_branch_row(
-            args.program_index,
-            args.group_index,
-            args.row_index,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_nested_contact_branch_row(args.group_index, args.row_index)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2216,19 +1963,14 @@ fn execute_delete_iec_ld_chained_contact_branch_row(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdChainedContactBranchRowArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_chained_contact_branch_row(args.group_index, args.row_index)),
-        doc.program_mut().delete_iec_ld_chained_contact_branch_row(
-            args.program_index,
-            args.group_index,
-            args.row_index,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_chained_contact_branch_row(args.group_index, args.row_index)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2257,19 +1999,14 @@ fn execute_delete_iec_ld_empty_branch_row(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdEmptyBranchRowArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_empty_branch_row(args.group_index, args.row_index)),
-        doc.program_mut().delete_iec_ld_empty_branch_row(
-            args.program_index,
-            args.group_index,
-            args.row_index
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_empty_branch_row(args.group_index, args.row_index)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2302,19 +2039,14 @@ fn execute_delete_iec_ld_ff_branch_output_row(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdFfBranchOutputRowArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_ff_branch_output_row(args.group_index, args.row_index)),
-        doc.program_mut().delete_iec_ld_ff_branch_output_row(
-            args.program_index,
-            args.group_index,
-            args.row_index
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_ff_branch_output_row(args.group_index, args.row_index)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2387,22 +2119,16 @@ fn execute_insert_iec_ld_leading_contact(
     doc: &mut XgwxDocument,
     args: &InsertIecLdLeadingContactArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_leading_contact(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_leading_contact(
                 args.insertion_offset,
                 &args.contact_kind,
-                &args.variable
-            )),
-        doc.program_mut().insert_iec_ld_leading_contact(
-            args.program_index,
-            args.insertion_offset,
-            &args.contact_kind,
-            &args.variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2434,28 +2160,19 @@ fn execute_insert_iec_ld_contact(
     doc: &mut XgwxDocument,
     args: &InsertIecLdContactArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_contact(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_contact(
                 args.wire_offset,
                 args.raw_x,
                 args.expected_wire_start_x,
                 args.expected_wire_end_x,
                 &args.contact_kind,
-                &args.variable
-            )),
-        doc.program_mut().insert_iec_ld_contact(
-            args.program_index,
-            args.wire_offset,
-            args.raw_x,
-            args.expected_wire_start_x,
-            args.expected_wire_end_x,
-            &args.contact_kind,
-            &args.variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2490,24 +2207,17 @@ fn execute_insert_iec_ld_short_wire_contact(
     doc: &mut XgwxDocument,
     args: &InsertIecLdShortWireContactArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_short_wire_contact(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_short_wire_contact(
                 args.wire_offset,
                 args.expected_raw_x,
                 &args.contact_kind,
-                &args.variable
-            )),
-        doc.program_mut().insert_iec_ld_short_wire_contact(
-            args.program_index,
-            args.wire_offset,
-            args.expected_raw_x,
-            &args.contact_kind,
-            &args.variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2537,24 +2247,17 @@ fn execute_delete_iec_ld_contact(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdContactArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.delete_contact(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.delete_contact(
                 args.contact_offset,
                 args.expected_raw_x,
                 &args.expected_contact_kind,
-                &args.expected_variable
-            )),
-        doc.program_mut().delete_iec_ld_contact(
-            args.program_index,
-            args.contact_offset,
-            args.expected_raw_x,
-            &args.expected_contact_kind,
-            &args.expected_variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.expected_variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2584,22 +2287,16 @@ fn execute_delete_iec_ld_no_contact(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdNoContactArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.delete_no_contact(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.delete_no_contact(
                 args.contact_offset,
                 args.expected_raw_x,
-                &args.expected_variable
-            )),
-        doc.program_mut().delete_iec_ld_no_contact(
-            args.program_index,
-            args.contact_offset,
-            args.expected_raw_x,
-            &args.expected_variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.expected_variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2630,24 +2327,17 @@ fn execute_delete_iec_ld_contact_cell(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdContactCellArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.delete_contact_cell(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.delete_contact_cell(
                 args.contact_offset,
                 args.expected_raw_x,
                 &args.expected_contact_kind,
-                &args.expected_variable
-            )),
-        doc.program_mut().delete_iec_ld_contact_cell(
-            args.program_index,
-            args.contact_offset,
-            args.expected_raw_x,
-            &args.expected_contact_kind,
-            &args.expected_variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.expected_variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2677,22 +2367,16 @@ fn execute_delete_iec_ld_no_contact_cell(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdNoContactCellArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.delete_no_contact_cell(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.delete_no_contact_cell(
                 args.contact_offset,
                 args.expected_raw_x,
-                &args.expected_variable
-            )),
-        doc.program_mut().delete_iec_ld_no_contact_cell(
-            args.program_index,
-            args.contact_offset,
-            args.expected_raw_x,
-            &args.expected_variable,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.expected_variable,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2721,19 +2405,14 @@ fn execute_delete_iec_ld_horizontal_wire(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdHorizontalWireArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_horizontal_wire(args.wire_offset, args.expected_raw_x)),
-        doc.program_mut().delete_iec_ld_horizontal_wire(
-            args.program_index,
-            args.wire_offset,
-            args.expected_raw_x
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_horizontal_wire(args.wire_offset, args.expected_raw_x)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2763,22 +2442,14 @@ fn execute_delete_ladder_horizontal_wire(
     doc: &mut XgwxDocument,
     args: &DeleteLadderHorizontalWireArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.ladder()?.delete_horizontal_wire(
-                args.raw_y,
-                args.start_x,
-                args.end_x
-            )),
-        doc.program_mut().delete_ladder_horizontal_wire(
-            args.program_index,
-            args.raw_y,
-            args.start_x,
-            args.end_x
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
+                .ladder()?
+                .delete_horizontal_wire(args.raw_y, args.start_x, args.end_x)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2808,22 +2479,14 @@ fn execute_delete_ladder_vertical_wire(
     doc: &mut XgwxDocument,
     args: &DeleteLadderVerticalWireArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.ladder()?.delete_vertical_wire(
-                args.raw_x,
-                args.start_y,
-                args.end_y
-            )),
-        doc.program_mut().delete_ladder_vertical_wire(
-            args.program_index,
-            args.raw_x,
-            args.start_y,
-            args.end_y
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
+                .ladder()?
+                .delete_vertical_wire(args.raw_x, args.start_y, args.end_y)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2857,24 +2520,16 @@ fn execute_delete_iec_ld_horizontal_wire_record(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdHorizontalWireRecordArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(
-                |mut program| program.iec_ld()?.delete_horizontal_wire_record(
-                    args.offset,
-                    args.expected_start_x,
-                    args.expected_end_x
-                )
-            ),
-        doc.program_mut().delete_iec_ld_horizontal_wire_record(
-            args.program_index,
-            args.offset,
-            args.expected_start_x,
-            args.expected_end_x,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.delete_horizontal_wire_record(
+                args.offset,
+                args.expected_start_x,
+                args.expected_end_x,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2903,19 +2558,14 @@ fn execute_delete_iec_ld_isolated_element(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdIsolatedElementArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_isolated_element(args.offset, &args.expected)),
-        doc.program_mut().delete_iec_ld_isolated_element(
-            args.program_index,
-            args.offset,
-            &args.expected
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_isolated_element(args.offset, &args.expected)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2950,24 +2600,17 @@ fn execute_insert_iec_ld_function_output_wire(
     doc: &mut XgwxDocument,
     args: &InsertIecLdFunctionOutputWireArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_function_output_wire(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_function_output_wire(
                 args.block_offset,
                 &args.expected_name,
                 &args.pin_name,
-                args.start_x
-            )),
-        doc.program_mut().insert_iec_ld_function_output_wire(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-            &args.pin_name,
-            args.start_x,
-        )
-    )
-    .map_err(|error| error.to_string())
+                args.start_x,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -2996,19 +2639,14 @@ fn execute_repair_iec_ld_horizontal_wire(
     doc: &mut XgwxDocument,
     args: &RepairIecLdHorizontalWireArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .repair_horizontal_wire(args.insertion_offset, args.expected_raw_x)),
-        doc.program_mut().repair_iec_ld_horizontal_wire(
-            args.program_index,
-            args.insertion_offset,
-            args.expected_raw_x,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .repair_horizontal_wire(args.insertion_offset, args.expected_raw_x)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3041,19 +2679,14 @@ fn execute_delete_iec_ld_function_output_operand(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdFunctionOutputOperandArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_function_output_operand(args.offset, &args.expected)),
-        doc.program_mut().delete_iec_ld_function_output_operand(
-            args.program_index,
-            args.offset,
-            &args.expected
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_function_output_operand(args.offset, &args.expected)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3088,26 +2721,17 @@ fn execute_assign_iec_ld_function_output_operand(
     doc: &mut XgwxDocument,
     args: &AssignIecLdFunctionOutputOperandArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(
-                |mut program| program.iec_ld()?.assign_function_output_operand(
-                    args.block_offset,
-                    &args.expected_name,
-                    args.ordinal,
-                    &args.value
-                )
-            ),
-        doc.program_mut().assign_iec_ld_function_output_operand(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-            args.ordinal,
-            &args.value,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.assign_function_output_operand(
+                args.block_offset,
+                &args.expected_name,
+                args.ordinal,
+                &args.value,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3137,22 +2761,16 @@ fn execute_update_iec_ld_function_operand(
     doc: &mut XgwxDocument,
     args: &UpdateIecLdFunctionOperandArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.update_function_operand(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.update_function_operand(
                 args.offset,
                 &args.expected,
-                &args.replacement
-            )),
-        doc.program_mut().update_iec_ld_function_operand(
-            args.program_index,
-            args.offset,
-            &args.expected,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.replacement,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3185,19 +2803,14 @@ fn execute_delete_iec_ld_scalar_chain_function(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdScalarChainFunctionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_scalar_chain_function(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_scalar_chain_function(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_scalar_chain_function(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3232,26 +2845,17 @@ fn execute_replace_iec_ld_scalar_chain_function(
     doc: &mut XgwxDocument,
     args: &ReplaceIecLdScalarChainFunctionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(
-                |mut program| program.iec_ld()?.replace_scalar_chain_function(
-                    args.block_offset,
-                    &args.expected_name,
-                    &args.function_name,
-                    &args.operands
-                )
-            ),
-        doc.program_mut().replace_iec_ld_scalar_chain_function(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-            &args.function_name,
-            &args.operands,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.replace_scalar_chain_function(
+                args.block_offset,
+                &args.expected_name,
+                &args.function_name,
+                &args.operands,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3284,19 +2888,14 @@ fn execute_delete_iec_ld_terminal_function(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdTerminalFunctionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_terminal_function(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_terminal_function(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_terminal_function(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3327,24 +2926,17 @@ fn execute_insert_iec_ld_terminal_timer(
     doc: &mut XgwxDocument,
     args: &InsertIecLdTerminalTimerArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_terminal_timer(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_terminal_timer(
                 args.contact_offset,
                 &args.instance,
                 &args.preset,
-                &args.elapsed
-            )),
-        doc.program_mut().insert_iec_ld_terminal_timer(
-            args.program_index,
-            args.contact_offset,
-            &args.instance,
-            &args.preset,
-            &args.elapsed,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.elapsed,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3374,22 +2966,16 @@ fn execute_insert_iec_ld_terminal_move(
     doc: &mut XgwxDocument,
     args: &InsertIecLdTerminalMoveArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_terminal_move(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_terminal_move(
                 args.contact_offset,
                 &args.input_operand,
-                &args.output_operand
-            )),
-        doc.program_mut().insert_iec_ld_terminal_move(
-            args.program_index,
-            args.contact_offset,
-            &args.input_operand,
-            &args.output_operand,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.output_operand,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3422,19 +3008,14 @@ fn execute_delete_iec_ld_standalone_function(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdStandaloneFunctionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_standalone_function(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_standalone_function(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_standalone_function(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3462,19 +3043,14 @@ fn execute_delete_iec_ld_group(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdGroupArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_group(args.group_index, args.expected_first_row_index)),
-        doc.program_mut().delete_iec_ld_group(
-            args.program_index,
-            args.group_index,
-            args.expected_first_row_index,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_group(args.group_index, args.expected_first_row_index)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3504,24 +3080,17 @@ fn execute_replace_iec_ld_group(
     doc: &mut XgwxDocument,
     args: &ReplaceIecLdGroupArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.replace_group(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.replace_group(
                 args.source_group_index,
                 args.expected_source_first_row_index,
                 args.destination_group_index,
-                args.expected_destination_first_row_index
-            )),
-        doc.program_mut().replace_iec_ld_group(
-            args.program_index,
-            args.source_group_index,
-            args.expected_source_first_row_index,
-            args.destination_group_index,
-            args.expected_destination_first_row_index,
-        )
-    )
-    .map_err(|error| error.to_string())
+                args.expected_destination_first_row_index,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3558,28 +3127,19 @@ fn execute_replace_iec_ld_group_from_program(
     doc: &mut XgwxDocument,
     args: &ReplaceIecLdGroupFromProgramArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.destination_program_index)
-            .and_then(|mut program| program.iec_ld()?.replace_group_from_program(
+    doc.program_mut()
+        .get(args.destination_program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.replace_group_from_program(
                 args.source_program_index,
                 args.source_group_index,
                 args.expected_source_first_row_index,
                 args.destination_group_index,
                 args.expected_destination_first_row_index,
-                args.copy_missing_locals
-            )),
-        doc.program_mut().replace_iec_ld_group_from_program(
-            args.source_program_index,
-            args.source_group_index,
-            args.expected_source_first_row_index,
-            args.destination_program_index,
-            args.destination_group_index,
-            args.expected_destination_first_row_index,
-            args.copy_missing_locals,
-        )
-    )
-    .map_err(|error| error.to_string())
+                args.copy_missing_locals,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3608,22 +3168,16 @@ fn execute_move_iec_ld_group(
     doc: &mut XgwxDocument,
     args: &MoveIecLdGroupArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.move_group(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.move_group(
                 args.group_index,
                 args.expected_first_row_index,
-                args.destination_first_row_index
-            )),
-        doc.program_mut().move_iec_ld_group(
-            args.program_index,
-            args.group_index,
-            args.expected_first_row_index,
-            args.destination_first_row_index,
-        )
-    )
-    .map_err(|error| error.to_string())
+                args.destination_first_row_index,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3652,22 +3206,16 @@ fn execute_copy_iec_ld_group(
     doc: &mut XgwxDocument,
     args: &CopyIecLdGroupArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.copy_group(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.copy_group(
                 args.group_index,
                 args.expected_first_row_index,
-                args.destination_first_row_index
-            )),
-        doc.program_mut().copy_iec_ld_group(
-            args.program_index,
-            args.group_index,
-            args.expected_first_row_index,
-            args.destination_first_row_index,
-        )
-    )
-    .map_err(|error| error.to_string())
+                args.destination_first_row_index,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3698,24 +3246,17 @@ fn execute_copy_iec_ld_group_to_program(
     doc: &mut XgwxDocument,
     args: &CopyIecLdGroupToProgramArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.source_program_index)
-            .and_then(|mut program| program.iec_ld()?.copy_group_to_program(
+    doc.program_mut()
+        .get(args.source_program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.copy_group_to_program(
                 args.group_index,
                 args.expected_first_row_index,
                 args.destination_program_index,
-                args.destination_first_row_index
-            )),
-        doc.program_mut().copy_iec_ld_group_to_program(
-            args.source_program_index,
-            args.group_index,
-            args.expected_first_row_index,
-            args.destination_program_index,
-            args.destination_first_row_index,
-        )
-    )
-    .map_err(|error| error.to_string())
+                args.destination_first_row_index,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3750,26 +3291,17 @@ fn execute_copy_iec_ld_group_to_program_with_locals(
     doc: &mut XgwxDocument,
     args: &CopyIecLdGroupToProgramWithLocalsArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.source_program_index)
-            .and_then(
-                |mut program| program.iec_ld()?.copy_group_to_program_with_locals(
-                    args.group_index,
-                    args.expected_first_row_index,
-                    args.destination_program_index,
-                    args.destination_first_row_index
-                )
-            ),
-        doc.program_mut().copy_iec_ld_group_to_program_with_locals(
-            args.source_program_index,
-            args.group_index,
-            args.expected_first_row_index,
-            args.destination_program_index,
-            args.destination_first_row_index,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.source_program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.copy_group_to_program_with_locals(
+                args.group_index,
+                args.expected_first_row_index,
+                args.destination_program_index,
+                args.destination_first_row_index,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3797,19 +3329,14 @@ fn execute_insert_iec_ld_comment(
     doc: &mut XgwxDocument,
     args: &InsertIecLdCommentArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .insert_comment(args.destination_row_index, &args.text)),
-        doc.program_mut().insert_iec_ld_comment(
-            args.program_index,
-            args.destination_row_index,
-            &args.text
-        )
-    )
-    .map_err(|error| error.to_string())
+                .insert_comment(args.destination_row_index, &args.text)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3838,19 +3365,14 @@ fn execute_delete_iec_ld_branch_function(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdBranchFunctionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_branch_function(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_branch_function(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_branch_function(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3881,24 +3403,17 @@ fn execute_replace_iec_ld_branch_function(
     doc: &mut XgwxDocument,
     args: &ReplaceIecLdBranchFunctionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.replace_branch_function(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.replace_branch_function(
                 args.block_offset,
                 &args.expected_name,
                 &args.function_name,
-                &args.operands
-            )),
-        doc.program_mut().replace_iec_ld_branch_function(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-            &args.function_name,
-            &args.operands,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.operands,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3928,24 +3443,17 @@ fn execute_insert_iec_ld_function(
     doc: &mut XgwxDocument,
     args: &InsertIecLdFunctionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_function(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_function(
                 args.row_index,
                 args.raw_x,
                 &args.function_name,
-                &args.operands
-            )),
-        doc.program_mut().insert_iec_ld_function(
-            args.program_index,
-            args.row_index,
-            args.raw_x,
-            &args.function_name,
-            &args.operands,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.operands,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -3980,24 +3488,17 @@ fn execute_insert_iec_ld_standalone_function(
     doc: &mut XgwxDocument,
     args: &InsertIecLdStandaloneFunctionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_standalone_function(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_standalone_function(
                 args.insertion_offset,
                 &args.function_name,
                 &args.input_operand,
-                &args.output_operand
-            )),
-        doc.program_mut().insert_iec_ld_standalone_function(
-            args.program_index,
-            args.insertion_offset,
-            &args.function_name,
-            &args.input_operand,
-            &args.output_operand,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.output_operand,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4027,22 +3528,16 @@ fn execute_insert_iec_ld_function_cell(
     doc: &mut XgwxDocument,
     args: &InsertIecLdFunctionCellArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.insert_function_cell(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.insert_function_cell(
                 args.insertion_offset,
                 &args.function_name,
-                &args.instance_name
-            )),
-        doc.program_mut().insert_iec_ld_function_cell(
-            args.program_index,
-            args.insertion_offset,
-            &args.function_name,
-            &args.instance_name,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.instance_name,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4071,19 +3566,14 @@ fn execute_delete_iec_ld_function_cell(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdFunctionCellArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_function_cell(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_function_cell(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_function_cell(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4112,19 +3602,14 @@ fn execute_delete_iec_ld_eq_chain_head(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdEqChainHeadArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_eq_chain_head(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_eq_chain_head(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_eq_chain_head(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4157,19 +3642,14 @@ fn execute_delete_iec_ld_heating_chain_head(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdHeatingChainHeadArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_heating_chain_head(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_heating_chain_head(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_heating_chain_head(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4202,19 +3682,14 @@ fn execute_delete_iec_ld_heating_chain_middle(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdHeatingChainMiddleArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_heating_chain_middle(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_heating_chain_middle(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_heating_chain_middle(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4247,19 +3722,14 @@ fn execute_delete_iec_ld_heating_chain_x15_eq(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdHeatingChainX15EqArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_heating_chain_x15_eq(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_heating_chain_x15_eq(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_heating_chain_x15_eq(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4292,19 +3762,14 @@ fn execute_delete_iec_ld_heating_chain_contact_eq(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdHeatingChainContactEqArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_heating_chain_contact_eq(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_heating_chain_contact_eq(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_heating_chain_contact_eq(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4337,20 +3802,14 @@ fn execute_delete_iec_ld_heating_chain_x3_eq_repaired(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdHeatingChainX3EqRepairedArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_heating_chain_x3_eq_repaired(args.block_offset, &args.expected_name)),
-        doc.program_mut()
-            .delete_iec_ld_heating_chain_x3_eq_repaired(
-                args.program_index,
-                args.block_offset,
-                &args.expected_name,
-            )
-    )
-    .map_err(|error| error.to_string())
+                .delete_heating_chain_x3_eq_repaired(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4383,19 +3842,14 @@ fn execute_delete_iec_ld_heating_chain_x3_eq(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdHeatingChainX3EqArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_heating_chain_x3_eq(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_heating_chain_x3_eq(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_heating_chain_x3_eq(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4426,14 +3880,10 @@ fn execute_repair_iec_ld_heating_chain_x3_eq_deletion(
     doc: &mut XgwxDocument,
     args: &RepairIecLdHeatingChainX3EqDeletionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.repair_heating_chain_x3_eq_deletion()),
-        doc.program_mut()
-            .repair_iec_ld_heating_chain_x3_eq_deletion(args.program_index)
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| program.iec_ld()?.repair_heating_chain_x3_eq_deletion())
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4466,19 +3916,14 @@ fn execute_delete_iec_ld_connected_arithmetic(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdConnectedArithmeticArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_connected_arithmetic(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_connected_arithmetic(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_connected_arithmetic(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4511,19 +3956,14 @@ fn execute_delete_iec_ld_branched_arithmetic(
     doc: &mut XgwxDocument,
     args: &DeleteIecLdBranchedArithmeticArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .iec_ld()?
-                .delete_branched_arithmetic(args.block_offset, &args.expected_name)),
-        doc.program_mut().delete_iec_ld_branched_arithmetic(
-            args.program_index,
-            args.block_offset,
-            &args.expected_name,
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_branched_arithmetic(args.block_offset, &args.expected_name)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4557,22 +3997,16 @@ fn execute_update_iec_ld_arithmetic_function(
     doc: &mut XgwxDocument,
     args: &UpdateIecLdArithmeticFunctionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.update_arithmetic_function(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.update_arithmetic_function(
                 args.offset,
                 &args.expected,
-                &args.replacement
-            )),
-        doc.program_mut().update_iec_ld_arithmetic_function(
-            args.program_index,
-            args.offset,
-            &args.expected,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.replacement,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4606,22 +4040,16 @@ fn execute_update_iec_ld_comparison_function(
     doc: &mut XgwxDocument,
     args: &UpdateIecLdComparisonFunctionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.iec_ld()?.update_comparison_function(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.iec_ld()?.update_comparison_function(
                 args.offset,
                 &args.expected,
-                &args.replacement
-            )),
-        doc.program_mut().update_iec_ld_comparison_function(
-            args.program_index,
-            args.offset,
-            &args.expected,
-            &args.replacement,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.replacement,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4648,14 +4076,10 @@ fn execute_edit_ladder_cell(
     doc: &mut XgwxDocument,
     args: &EditLadderCellArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.ladder()?.edit_cell(&args.edit.clone().into())),
-        doc.program_mut()
-            .edit_ladder_cell(args.program_index, &args.edit.clone().into())
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| program.ladder()?.edit_cell(&args.edit.clone().into()))
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4685,22 +4109,14 @@ fn execute_insert_ladder_instruction(
     doc: &mut XgwxDocument,
     args: &InsertLadderInstructionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.ladder()?.insert_instruction(
-                args.raw_y,
-                &args.mnemonic,
-                &args.operands
-            )),
-        doc.program_mut().insert_ladder_instruction(
-            args.program_index,
-            args.raw_y,
-            &args.mnemonic,
-            &args.operands,
-        )
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
+                .ladder()?
+                .insert_instruction(args.raw_y, &args.mnemonic, &args.operands)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4731,24 +4147,17 @@ fn execute_insert_ladder_comparison(
     doc: &mut XgwxDocument,
     args: &InsertLadderComparisonArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.ladder()?.insert_comparison(
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program.ladder()?.insert_comparison(
                 args.raw_y,
                 args.column,
                 &args.mnemonic,
-                &args.operands
-            )),
-        doc.program_mut().insert_ladder_comparison(
-            args.program_index,
-            args.raw_y,
-            args.column,
-            &args.mnemonic,
-            &args.operands,
-        )
-    )
-    .map_err(|error| error.to_string())
+                &args.operands,
+            )
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4777,16 +4186,14 @@ fn execute_delete_ladder_comparison(
     doc: &mut XgwxDocument,
     args: &DeleteLadderComparisonArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .ladder()?
-                .delete_comparison(args.offset, &args.expected)),
-        doc.program_mut()
-            .delete_ladder_comparison(args.program_index, args.offset, &args.expected)
-    )
-    .map_err(|error| error.to_string())
+                .delete_comparison(args.offset, &args.expected)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4815,19 +4222,14 @@ fn execute_delete_ladder_instruction(
     doc: &mut XgwxDocument,
     args: &DeleteLadderInstructionArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .ladder()?
-                .delete_instruction(args.offset, &args.expected)),
-        doc.program_mut().delete_ladder_instruction(
-            args.program_index,
-            args.offset,
-            &args.expected
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_instruction(args.offset, &args.expected)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4854,14 +4256,10 @@ fn execute_edit_ladder_comment(
     doc: &mut XgwxDocument,
     args: &EditLadderCommentArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.ladder()?.edit_comment(&args.edit.clone().into())),
-        doc.program_mut()
-            .edit_ladder_comment(args.program_index, &args.edit.clone().into())
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| program.ladder()?.edit_comment(&args.edit.clone().into()))
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4890,19 +4288,14 @@ fn execute_delete_ladder_rung_comment(
     doc: &mut XgwxDocument,
     args: &DeleteLadderRungCommentArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| {
+            program
                 .ladder()?
-                .delete_rung_comment(args.raw_y, &args.expected)),
-        doc.program_mut().delete_ladder_rung_comment(
-            args.program_index,
-            args.raw_y,
-            &args.expected
-        )
-    )
-    .map_err(|error| error.to_string())
+                .delete_rung_comment(args.raw_y, &args.expected)
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4929,14 +4322,10 @@ fn execute_edit_ladder_branch(
     doc: &mut XgwxDocument,
     args: &EditLadderBranchArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.ladder()?.edit_branch(&args.edit.clone().into())),
-        doc.program_mut()
-            .edit_ladder_branch(args.program_index, &args.edit.clone().into())
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| program.ladder()?.edit_branch(&args.edit.clone().into()))
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4963,14 +4352,10 @@ fn execute_insert_ladder_row(
     doc: &mut XgwxDocument,
     args: &InsertLadderRowArgs,
 ) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|mut program| program.ladder()?.insert_row(args.raw_y)),
-        doc.program_mut()
-            .insert_ladder_row(args.program_index, args.raw_y)
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|mut program| program.ladder()?.insert_row(args.raw_y))
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4996,34 +4381,26 @@ fn apply_move_program(doc: &mut XgwxDocument, args: Value) -> Result<(), String>
 }
 
 fn execute_move_program(doc: &mut XgwxDocument, args: &MoveProgramArgs) -> Result<(), String> {
-    current_api!(
-        {
-            let target = doc
-                .program()
-                .get(args.to)
-                .map_err(|error| error.to_string())?
-                .summary()
-                .object_id;
-            doc.program_mut().get(args.from).and_then(|mut program| {
-                if args.expected_object_id.is_empty()
-                    || program.object_id() != args.expected_object_id
-                    || args.expected_target_id.is_empty()
-                    || target.as_deref() != Some(&args.expected_target_id)
-                {
-                    return Err(xgwx::XgwxError::TextProgramEdit(
-                        "program identity changed; reload before applying".into(),
-                    ));
-                }
-                program.move_to(args.to)
-            })
-        },
-        doc.program_mut().move_program(
-            args.from,
-            args.to,
-            &args.expected_object_id,
-            &args.expected_target_id,
-        )
-    )
+    {
+        let target = doc
+            .program()
+            .get(args.to)
+            .map_err(|error| error.to_string())?
+            .summary()
+            .object_id;
+        doc.program_mut().get(args.from).and_then(|mut program| {
+            if args.expected_object_id.is_empty()
+                || program.object_id() != args.expected_object_id
+                || args.expected_target_id.is_empty()
+                || target.as_deref() != Some(&args.expected_target_id)
+            {
+                return Err(xgwx::XgwxError::TextProgramEdit(
+                    "program identity changed; reload before applying".into(),
+                ));
+            }
+            program.move_to(args.to)
+        })
+    }
     .map_err(|error| error.to_string())
 }
 
@@ -5048,23 +4425,18 @@ fn apply_delete_program(doc: &mut XgwxDocument, args: Value) -> Result<(), Strin
 }
 
 fn execute_delete_program(doc: &mut XgwxDocument, args: &DeleteProgramArgs) -> Result<(), String> {
-    current_api!(
-        doc.program_mut()
-            .get(args.program_index)
-            .and_then(|program| {
-                if args.expected_object_id.is_empty()
-                    || program.object_id() != args.expected_object_id
-                {
-                    return Err(xgwx::XgwxError::TextProgramEdit(
-                        "program identity changed; reload before applying".into(),
-                    ));
-                }
-                program.delete()
-            }),
-        doc.program_mut()
-            .delete_program(args.program_index, &args.expected_object_id)
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .get(args.program_index)
+        .and_then(|program| {
+            if args.expected_object_id.is_empty() || program.object_id() != args.expected_object_id
+            {
+                return Err(xgwx::XgwxError::TextProgramEdit(
+                    "program identity changed; reload before applying".into(),
+                ));
+            }
+            program.delete()
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -5087,11 +4459,9 @@ fn apply_create_program(doc: &mut XgwxDocument, args: Value) -> Result<(), Strin
 }
 
 fn execute_create_program(doc: &mut XgwxDocument, args: &CreateProgramArgs) -> Result<(), String> {
-    current_api!(
-        doc.program_mut().create(&args.patch.clone().into()),
-        doc.program_mut().create_program(&args.patch.clone().into())
-    )
-    .map_err(|error| error.to_string())
+    doc.program_mut()
+        .create(&args.patch.clone().into())
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -5141,27 +4511,23 @@ fn apply_edit_sfc_entity(doc: &mut XgwxDocument, args: Value) -> Result<(), Stri
 }
 
 fn execute_edit_sfc_entity(doc: &mut XgwxDocument, args: &EditSfcEntityArgs) -> Result<(), String> {
-    current_api!(
-        {
-            let patch: xgwx::SfcEntityPatch = args.patch.clone().into();
-            doc.program_mut()
-                .get(patch.program_index)
-                .and_then(|mut program| {
-                    program.sfc()?.edit_entity(&xgwx::SfcEntityEdit {
-                        block_index: patch.block_index,
-                        entity_index: patch.entity_index,
-                        expected_type: patch.expected_type,
-                        expected_row: patch.expected_row,
-                        expected_column: patch.expected_column,
-                        field: patch.field,
-                        expected_value: patch.expected_value,
-                        replacement: patch.replacement,
-                    })
-                })
-        },
+    {
+        let patch: xgwx::SfcEntityPatch = args.patch.clone().into();
         doc.program_mut()
-            .edit_sfc_entity(&args.patch.clone().into())
-    )
+            .get(patch.program_index)
+            .and_then(|mut program| {
+                program.sfc()?.edit_entity(&xgwx::SfcEntityEdit {
+                    block_index: patch.block_index,
+                    entity_index: patch.entity_index,
+                    expected_type: patch.expected_type,
+                    expected_row: patch.expected_row,
+                    expected_column: patch.expected_column,
+                    field: patch.field,
+                    expected_value: patch.expected_value,
+                    replacement: patch.replacement,
+                })
+            })
+    }
     .map_err(|error| error.to_string())
 }
 
@@ -5188,23 +4554,19 @@ fn execute_replace_sfc_sequence(
     doc: &mut XgwxDocument,
     args: &ReplaceSfcSequenceArgs,
 ) -> Result<(), String> {
-    current_api!(
-        {
-            let patch: xgwx::SfcSequencePatch = args.patch.clone().into();
-            doc.program_mut()
-                .get(patch.program_index)
-                .and_then(|mut program| {
-                    program.sfc()?.replace_sequence(&xgwx::SfcSequenceEdit {
-                        block_index: patch.block_index,
-                        expected_entities: patch.expected_entities,
-                        rows: patch.rows,
-                        expected_rows: patch.expected_rows,
-                    })
-                })
-        },
+    {
+        let patch: xgwx::SfcSequencePatch = args.patch.clone().into();
         doc.program_mut()
-            .replace_sfc_sequence(&args.patch.clone().into())
-    )
+            .get(patch.program_index)
+            .and_then(|mut program| {
+                program.sfc()?.replace_sequence(&xgwx::SfcSequenceEdit {
+                    block_index: patch.block_index,
+                    expected_entities: patch.expected_entities,
+                    rows: patch.rows,
+                    expected_rows: patch.expected_rows,
+                })
+            })
+    }
     .map_err(|error| error.to_string())
 }
 
@@ -5231,28 +4593,24 @@ fn execute_edit_sfc_variable(
     doc: &mut XgwxDocument,
     args: &EditSfcVariableArgs,
 ) -> Result<(), String> {
-    current_api!(
-        {
-            let patch: xgwx::SfcVariablePatch = args.patch.clone().into();
-            doc.program_mut()
-                .get(patch.program_index)
-                .and_then(|mut program| {
-                    program
-                        .variable_mut()
-                        .edit_declaration(&xgwx::ProgramVariablePatch {
-                            expected_variables: patch.expected_variables,
-                            name: patch.name,
-                            data_type: patch.data_type,
-                            description: patch.description,
-                            remove: patch.remove,
-                            declaration: patch.declaration,
-                            update: patch.update,
-                        })
-                })
-        },
-        doc.variable_mut()
-            .edit_sfc_variable(&args.patch.clone().into())
-    )
+    {
+        let patch: xgwx::SfcVariablePatch = args.patch.clone().into();
+        doc.program_mut()
+            .get(patch.program_index)
+            .and_then(|mut program| {
+                program
+                    .variable_mut()
+                    .edit_declaration(&xgwx::ProgramVariablePatch {
+                        expected_variables: patch.expected_variables,
+                        name: patch.name,
+                        data_type: patch.data_type,
+                        description: patch.description,
+                        remove: patch.remove,
+                        declaration: patch.declaration,
+                        update: patch.update,
+                    })
+            })
+    }
     .map_err(|error| error.to_string())
 }
 

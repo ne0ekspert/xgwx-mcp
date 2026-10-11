@@ -1,5 +1,3 @@
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use xgwx_mcp::library_compat::DocumentNamespacesCompat;
 #[path = "../src/test_support.rs"]
 mod test_support;
 use serde_json::{Value, json};
@@ -126,14 +124,6 @@ fn coverage_manifest_matches_all_public_writers_and_callable_adapters() {
         let expected_source =
             std::fs::read_to_string(library_root().join(entry["source"].as_str().unwrap()))
                 .unwrap();
-        #[cfg(feature = "libxgwx-namespaced-api")]
-        let expected_source = if public_mutators(&expected_source).contains(name) {
-            expected_source
-        } else {
-            // The pinned manifest describes the old flat writers. The same
-            // operation names are public on the namespace editors.
-            std::fs::read_to_string(library_root().join("src/document_api.rs")).unwrap()
-        };
         assert!(
             public_mutators(&expected_source).contains(name),
             "wrong manifest source for {name}"

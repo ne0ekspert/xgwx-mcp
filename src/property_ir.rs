@@ -1,7 +1,5 @@
 //! Revision-scoped property documents, lowered only through existing writers.
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use crate::library_compat::DocumentNamespacesCompat;
-use crate::library_compat::module_summaries;
+
 use crate::storage::{EditOperation, StoreError};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -84,7 +82,7 @@ impl Projection {
         ));
         match section {
             "modules" => {
-                for (i, m) in module_summaries(doc).iter().enumerate() {
+                for (i, m) in doc.module_summaries().iter().enumerate() {
                     p.line(format!(
                         "module @m{i} base {} slot {} {{",
                         literal(&json!(m.base)),

@@ -1,6 +1,3 @@
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use xgwx_mcp::library_compat::DocumentNamespacesCompat;
-use xgwx_mcp::library_compat::module_summaries;
 #[path = "../src/test_support.rs"]
 mod test_support;
 use serde_json::{Value, json};
@@ -177,7 +174,7 @@ fn executable_examples_succeed_reparse_and_preserve_unrelated_payloads() {
         }
         if let Some(comment) = expected["module_comment"].as_str() {
             assert!(
-                module_summaries(&doc)
+                doc.module_summaries()
                     .iter()
                     .any(|m| m.comment.as_deref() == Some(comment))
             );

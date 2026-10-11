@@ -1,9 +1,7 @@
 use serde_json::{Value, json};
 use std::fs;
 use xgwx::XgwxDocument;
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use xgwx_mcp::library_compat::DocumentNamespacesCompat;
-use xgwx_mcp::library_compat::module_summaries;
+
 use xgwx_mcp::{
     inspection,
     operations::apply_operation,
@@ -90,7 +88,7 @@ fn source_transactions_preserve_payloads_and_expected_checks() {
             after.program().text_programs()[0].variables,
             doc.program().text_programs()[0].variables
         );
-        assert_eq!(module_summaries(&after), module_summaries(&doc));
+        assert_eq!(after.module_summaries(), doc.module_summaries());
         assert_eq!(after.header.signature, doc.header.signature);
         assert_eq!(after.header.label, doc.header.label);
         // Main-member alignment padding can change; native trailer payload stays exact.
@@ -338,7 +336,7 @@ fn vendor_il_updates_native_ladder_and_rejects_iec_or_branch_source() {
         doc.variable().variables().unwrap(),
         initial.variable().variables().unwrap()
     );
-    assert_eq!(module_summaries(&doc), module_summaries(&initial));
+    assert_eq!(doc.module_summaries(), initial.module_summaries());
     assert_eq!(doc.program().programs(), initial.program().programs());
     for source in [
         "LD TRUE\nST %MX0",

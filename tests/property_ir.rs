@@ -1,6 +1,3 @@
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use xgwx_mcp::library_compat::DocumentNamespacesCompat;
-use xgwx_mcp::library_compat::module_summaries;
 #[path = "../src/test_support.rs"]
 mod test_support;
 use serde_json::json;
@@ -69,7 +66,7 @@ fn module_properties_preserve_program_and_symbols_and_enforce_catalog_values() {
         ],
     );
     assert_eq!(
-        module_summaries(&doc)[0].comment.as_deref(),
+        doc.module_summaries()[0].comment.as_deref(),
         Some("Tank inputs")
     );
     assert_eq!(doc.module_option_values(0, 0).unwrap()[0].value, 3);

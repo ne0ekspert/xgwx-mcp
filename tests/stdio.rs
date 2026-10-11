@@ -1,5 +1,3 @@
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use xgwx_mcp::library_compat::DocumentNamespacesCompat;
 #[path = "../src/test_support.rs"]
 mod test_support;
 use rmcp::{

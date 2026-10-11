@@ -1,12 +1,12 @@
 use xgwx::create_project;
-use xgwx_mcp::{inspection, library_compat::module_summaries, property_ir::Projection};
+use xgwx_mcp::{inspection, property_ir::Projection};
 
 #[test]
 fn hardware_lists_and_property_indices_remain_installed_hardware_records() {
     let mut doc = create_project("XGK-CPUSN", "LD").unwrap();
     doc.insert_module(0, 0, "XGL-EFMT(B)").unwrap();
     doc.insert_module(0, 1, "XGL-EFMT(B)").unwrap();
-    let hardware = module_summaries(&doc);
+    let hardware = doc.module_summaries();
     assert_eq!(hardware.len(), 2);
     assert_eq!(hardware[0].slot, Some(0));
     assert_eq!(hardware[1].slot, Some(1));
@@ -27,7 +27,6 @@ fn hardware_lists_and_property_indices_remain_installed_hardware_records() {
     assert!(!properties.text.contains("module @m2"));
 }
 
-#[cfg(feature = "libxgwx-namespaced-api")]
 #[test]
 fn scoped_bases_expose_typed_memberships_and_bound_settings() {
     let mut doc = create_project("XGK-CPUSN", "LD").unwrap();
@@ -51,7 +50,6 @@ fn scoped_bases_expose_typed_memberships_and_bound_settings() {
     );
 }
 
-#[cfg(feature = "libxgwx-namespaced-api")]
 #[test]
 fn selected_lifecycle_adapters_reject_stale_wire_identity() {
     use serde_json::json;

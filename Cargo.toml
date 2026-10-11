@@ -6,7 +6,7 @@ description = "Local MCP server for loss-preserving XGWX inspection and editing"
 license = "GPL-3.0-only"
 
 [dependencies]
-xgwx = { package = "libxgwx", git = "https://github.com/ne0ekspert/libxgwx", rev = "837ba63ec3cf6d00b040346a25be9ce417dff91b", features = ["write", "il"] }
+xgwx = { package = "libxgwx", git = "https://github.com/ne0ekspert/libxgwx", rev = "623573b1f8dc4e8a3c4155ee56cc13b76f36292b", features = ["write", "il"] }
 rmcp = { version = "3.5.1", features = ["server", "macros", "schemars", "transport-io"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "process"] }
 serde = { version = "1", features = ["derive"] }
@@ -22,7 +22,3 @@ rmcp = { version = "3.5.1", features = ["client", "transport-child-process"] }
 base64 = "0.22"
 bzip2 = { version = "0.5", default-features = false, features = ["libbz2-rs-sys"] }
 roxmltree = "0.20"
-
-[features]
-# Opt in only when a local override or a future Git pin selects the namespaced API.
-libxgwx-namespaced-api = []

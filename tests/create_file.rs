@@ -5,8 +5,7 @@ use std::{
     thread,
 };
 use xgwx::XgwxDocument;
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use xgwx_mcp::library_compat::DocumentNamespacesCompat;
+
 use xgwx_mcp::{
     storage::{EditOperation, FileStore, revision},
     templates::{self, ProjectTemplate},

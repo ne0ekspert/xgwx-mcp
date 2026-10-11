@@ -1,10 +1,6 @@
 //! Read-only protocol views. These mappings deliberately do not require the
 //! library's WASM-only Serde implementations or expose opaque program bytes.
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use crate::library_compat::DocumentNamespacesCompat;
-#[cfg(not(feature = "libxgwx-namespaced-api"))]
-use crate::library_compat::base_summaries;
-use crate::library_compat::module_summaries;
+
 use serde_json::{Value, json};
 use xgwx::*;
 
@@ -207,7 +203,6 @@ fn symbols(doc: &XgwxDocument, program_index: Option<usize>, offset: usize, limi
         "note": "Local symbol record_offset and identity are revision-specific. SFC declarations are in the sfc section; standalone ST/IL declarations with full snapshots are in text.variables."})
 }
 
-#[cfg(feature = "libxgwx-namespaced-api")]
 fn typed_module(module: &Module) -> Value {
     let (kind, scope, hardware) = match module {
         Module::Io(io) => ("io", io.base.configuration_index, Some(&io.base.hardware)),
@@ -251,7 +246,6 @@ fn typed_module(module: &Module) -> Value {
     }
     result
 }
-#[cfg(feature = "libxgwx-namespaced-api")]
 fn typed_settings(config: &NetworkConfiguration) -> Value {
     match config {
         NetworkConfiguration::Cnet(c) => json!({"kind":"cnet", "value": cnet_config(c)}),
@@ -264,40 +258,20 @@ fn typed_settings(config: &NetworkConfiguration) -> Value {
     }
 }
 fn typed_modules(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
-    #[cfg(feature = "libxgwx-namespaced-api")]
-    {
-        page(&doc.modules(), offset, limit, typed_module)
-    }
-    #[cfg(not(feature = "libxgwx-namespaced-api"))]
-    {
-        let _ = (doc, offset, limit);
-        json!({"status":"unavailable", "reason":"The pinned library does not expose typed modules; select a current library override and libxgwx-namespaced-api.", "items":[], "total":null})
-    }
+    page(&doc.modules(), offset, limit, typed_module)
 }
 
 fn hardware_bases(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
-    #[cfg(feature = "libxgwx-namespaced-api")]
-    {
-        page(&doc.bases(), offset, limit, |base| {
-            let summary = base.summary();
-            json!({"base":base.number(), "slot_count":base.slot_count(), "base_index":base.index(),
+    page(&doc.bases(), offset, limit, |base| {
+        let summary = base.summary();
+        json!({"base":base.number(), "slot_count":base.slot_count(), "base_index":base.index(),
             "configuration_index":base.configuration_index(), "attributes":attrs(&summary.attributes),
             "modules":page(&base.modules(), offset, limit, typed_module)})
-        })
-    }
-    #[cfg(not(feature = "libxgwx-namespaced-api"))]
-    {
-        indexed_page(&base_summaries(doc), offset, limit, |index, base| {
-            let mut result = fields!(base; base, slot_count);
-            result["base_index"] = json!(index);
-            result["attributes"] = attrs(&base.attributes);
-            result
-        })
-    }
+    })
 }
 
 fn hardware(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
-    let modules = module_summaries(doc);
+    let modules = doc.module_summaries();
     let selections = modules
         .iter()
         .map(|m| {
@@ -764,7 +738,7 @@ pub fn inspect(
                 "container": {"xml_length": doc.xml.len(), "main_gzip_length": doc.main_gzip.len(),
                     "trailer_length": doc.trailer.len(), "trailer_gzip_members": doc.trailer_gzip_members.len()},
                 "counts": {"programs": doc.program().programs().len(), "tasks": doc.program().tasks().len(),
-                    "modules": module_summaries(doc).len(), "networks": doc.networks().len(), "sfc_programs": doc.program().sfc_programs().len(), "text_programs":doc.program().text_programs().len()},
+                    "modules": doc.module_summaries().len(), "networks": doc.networks().len(), "sfc_programs": doc.program().sfc_programs().len(), "text_programs":doc.program().text_programs().len()},
                 "configurations": page(&doc.configurations(), offset, limit, configuration),
                 "programs": indexed_page(&doc.program().programs(), offset, limit, program_summary),
                 "sections": SECTIONS,
