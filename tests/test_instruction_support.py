@@ -13,7 +13,7 @@ SPEC.loader.exec_module(support)
 class InstructionSupportTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.library = ROOT.parent / "libxgwx"
+        cls.library = support.resolve_library_root()
         cls.mapping = support.load_support(cls.library)
 
     def test_source_metadata_keeps_refined_types_and_constant_permissions(self):

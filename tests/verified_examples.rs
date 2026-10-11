@@ -1,5 +1,8 @@
+#[path = "../src/test_support.rs"]
+mod test_support;
 use serde_json::{Value, json};
-use std::{collections::BTreeSet, path::Path};
+use std::collections::BTreeSet;
+use test_support::library_root;
 use xgwx::XgwxDocument;
 use xgwx_mcp::{
     operations::{apply_operation, describe_operation},
@@ -12,8 +15,8 @@ fn executable_examples_succeed_reparse_and_preserve_unrelated_payloads() {
     let mut names = BTreeSet::new();
     for case in catalog["cases"].as_array().unwrap() {
         let id = case["id"].as_str().unwrap();
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../libxgwx/fixtures")
+        let path = library_root()
+            .join("fixtures")
             .join(case["fixture"].as_str().unwrap());
         let bytes = std::fs::read(path).unwrap();
         assert_eq!(

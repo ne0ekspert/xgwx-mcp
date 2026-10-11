@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "source_crate": "../libxgwx",
+  "source_crate": "https://github.com/ne0ekspert/libxgwx/tree/837ba63ec3cf6d00b040346a25be9ce417dff91b",
   "public_mutator_count": 123,
   "excluded_helpers": [
     "to_bytes",

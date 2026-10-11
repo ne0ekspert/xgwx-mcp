@@ -905,8 +905,8 @@ mod tests {
 
     fn fixture(relative: &str) -> XgwxDocument {
         XgwxDocument::from_path(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../libxgwx/fixtures")
+            crate::test_support::library_root()
+                .join("fixtures")
                 .join(relative),
         )
         .unwrap()

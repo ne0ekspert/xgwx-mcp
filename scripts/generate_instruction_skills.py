@@ -20,7 +20,7 @@ import tempfile
 from urllib.parse import unquote
 
 from instruction_manual import Document, descendants, load_manual, text_content
-from instruction_support import load_support, resolve_support
+from instruction_support import load_support, resolve_support, resolve_library_root
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_MANUAL_SHA256 = "b866d589d800addcb039f9f09b182592464d6367faa55abf6dde9ac34a1580e0"
@@ -411,7 +411,7 @@ def main():
     source.add_argument("--manual", type=Path, help="original CHM (requires 7z)")
     source.add_argument("--manual-dir", type=Path, help="locally extracted CHM HTML directory")
     parser.add_argument("--manual-sha256", default=EXPECTED_MANUAL_SHA256)
-    parser.add_argument("--library-root", type=Path, default=ROOT.parent / "libxgwx")
+    parser.add_argument("--library-root", type=Path, default=None)
     parser.add_argument("--server-binary", type=Path)
     parser.add_argument("--overrides", type=Path, default=ROOT / "scripts/instruction_overrides.json")
     parser.add_argument("--output", type=Path, default=ROOT / "skills/xgwx-edit/references/instructions")
@@ -429,7 +429,7 @@ def main():
             extracted = args.manual_dir
             manual_hash = args.manual_sha256
         stage = temporary / "guides"
-        manifest = generate(extracted, args.library_root, args.server_binary, args.overrides, manual_hash, stage)
+        manifest = generate(extracted, args.library_root or resolve_library_root(), args.server_binary, args.overrides, manual_hash, stage)
         install(stage, args.output, args.check)
         print(json.dumps({"guides": manifest["guide_count"], "manual_names": manifest["manual_mnemonic_count"],
                           "catalog_entries": manifest["core_catalog_count"], "figures": len(manifest["assets"]),

@@ -1,16 +1,14 @@
+#[path = "../src/test_support.rs"]
+mod test_support;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
+use test_support::library_root;
 use xgwx::XgwxDocument;
 use xgwx_mcp::operation_types::{SfcEntity, SfcRow, SfcVariable};
 use xgwx_mcp::operations::{OPERATIONS, apply_operation, describe_operation, list_operations};
 
 fn fixture(path: &str) -> XgwxDocument {
-    XgwxDocument::from_path(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../libxgwx/fixtures")
-            .join(path),
-    )
-    .unwrap()
+    XgwxDocument::from_path(library_root().join("fixtures").join(path)).unwrap()
 }
 
 fn public_mutators(source: &str) -> BTreeSet<String> {
@@ -30,7 +28,7 @@ fn public_mutators(source: &str) -> BTreeSet<String> {
 
 #[test]
 fn coverage_manifest_matches_all_public_writers_and_callable_adapters() {
-    let source_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../libxgwx/src");
+    let source_root = library_root().join("src");
     let mut library_writers = BTreeSet::new();
     // Audit all source modules; a new public document writer must fail this check
     // even if it is introduced in a new module instead of the current four.
@@ -74,12 +72,9 @@ fn coverage_manifest_matches_all_public_writers_and_callable_adapters() {
             );
             assert_eq!(described["compatibility_alias"], false);
         }
-        let expected_source = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../libxgwx")
-                .join(entry["source"].as_str().unwrap()),
-        )
-        .unwrap();
+        let expected_source =
+            std::fs::read_to_string(library_root().join(entry["source"].as_str().unwrap()))
+                .unwrap();
         assert!(
             public_mutators(&expected_source).contains(name),
             "wrong manifest source for {name}"

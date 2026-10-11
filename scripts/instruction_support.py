@@ -3,7 +3,7 @@
 
 Prefer a supplied xgwx-mcp binary for its exported catalog. Source-table parsing
 is a deterministic offline fallback, and also checks that a supplied binary has
-the same metadata as the current sibling library. No projects are changed.
+the same metadata as the Cargo-resolved library. No projects are changed.
 """
 from __future__ import annotations
 
@@ -416,3 +416,15 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def resolve_library_root() -> Path:
+    """Locate the pinned Cargo dependency (or its local patch override)."""
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    output = subprocess.check_output(
+        ["cargo", "metadata", "--locked", "--offline", "--format-version", "1"], cwd=root
+    )
+    metadata = json.loads(output)
+    package = next(item for item in metadata["packages"] if item["name"] == "libxgwx")
+    return Path(package["manifest_path"]).parent

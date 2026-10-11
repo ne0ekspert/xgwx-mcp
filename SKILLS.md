@@ -4,7 +4,7 @@ Use `xgwx-mcp` to inspect a local LS XG5000 project, discover the library's supp
 
 ## Installation
 
-Keep `xgwx-mcp` and `libxgwx` as sibling directories and build the server with Rust 1.88 or newer:
+Build the server with Rust 1.88 or newer. Cargo fetches the pinned library dependency; no sibling checkout is required:
 
 ```bash
 cd /path/to/xgwx-mcp

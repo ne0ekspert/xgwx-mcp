@@ -582,10 +582,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("project.xgwx");
         fs::copy(
-            concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../libxgwx/fixtures/elements.xgwx"
-            ),
+            crate::test_support::library_root().join("fixtures/elements.xgwx"),
             &path,
         )
         .unwrap();

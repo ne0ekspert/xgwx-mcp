@@ -2,7 +2,7 @@
 
 ## Purpose and dependencies
 
-Provide a local stdio MCP server that exposes every current public editing method on `libxgwx::XgwxDocument` while preserving the library's format restrictions. The server owns its Serde/Schemars protocol DTOs and depends on the sibling `../libxgwx` checkout with `write` and `il` enabled. Use the official Rust MCP SDK (`rmcp`), Tokio, Serde, and Schemars; retain resolved dependency versions in `Cargo.lock`.
+Provide a local stdio MCP server that exposes every current public editing method on `libxgwx::XgwxDocument` while preserving the library's format restrictions. The server owns its Serde/Schemars protocol DTOs and depends on a commit-pinned [libxgwx Git dependency](https://github.com/ne0ekspert/libxgwx) with `write` and `il` enabled. Use the official Rust MCP SDK (`rmcp`), Tokio, Serde, and Schemars; retain resolved dependency versions in `Cargo.lock`.
 
 Do not edit MCP client configuration, contact a PLC, deploy the server, prune backups, or modify unrelated checkouts as part of normal server use.
 

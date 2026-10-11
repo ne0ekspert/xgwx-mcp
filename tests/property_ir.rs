@@ -1,17 +1,15 @@
+#[path = "../src/test_support.rs"]
+mod test_support;
 use serde_json::json;
-use std::{fs, path::Path};
+use std::fs;
+use test_support::library_root;
 use xgwx::XgwxDocument;
 use xgwx_mcp::{
     property_ir::Projection,
     storage::{FileStore, revision},
 };
 fn fixture(name: &str) -> XgwxDocument {
-    XgwxDocument::from_path(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../libxgwx/fixtures")
-            .join(name),
-    )
-    .unwrap()
+    XgwxDocument::from_path(library_root().join("fixtures").join(name)).unwrap()
 }
 fn patch(text: &str, changes: &[(&str, &str)]) -> String {
     patch_from(text, changes, 0)

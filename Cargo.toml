@@ -6,7 +6,7 @@ description = "Local MCP server for loss-preserving XGWX inspection and editing"
 license = "GPL-3.0-only"
 
 [dependencies]
-xgwx = { package = "libxgwx", path = "../libxgwx", features = ["write", "il"] }
+xgwx = { package = "libxgwx", git = "https://github.com/ne0ekspert/libxgwx", rev = "837ba63ec3cf6d00b040346a25be9ce417dff91b", features = ["write", "il"] }
 rmcp = { version = "3.5.1", features = ["server", "macros", "schemars", "transport-io"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "process"] }
 serde = { version = "1", features = ["derive"] }

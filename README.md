@@ -4,15 +4,23 @@ Local Rust stdio MCP server for inspecting and editing LS XG5000 `.xgwx` files t
 
 ## Build and run
 
-Keep this repository beside `libxgwx`; the dependency is `../libxgwx` with its `write` and `il` features enabled. Build with Rust 1.88 or newer:
+Build with Rust 1.88 or newer. Cargo fetches [libxgwx](https://github.com/ne0ekspert/libxgwx)
+at pinned revision `837ba63ec3cf6d00b040346a25be9ce417dff91b` with its `write` and `il` features enabled.
+No sibling checkout or dependency patch is required. The historical bundled
+rename-project patch is retained for older library baselines only.
 
-The tested library baseline is commit `b475c82`, with the public `rename_project`
-writer used by named-project creation. If that writer is absent, apply the bundled
-dependency patch from the library directory:
+For local library development, add this override to `.cargo/config.toml`:
 
-```bash
-git apply ../xgwx-mcp/patches/libxgwx-rename-project.patch
+```toml
+[patch."https://github.com/ne0ekspert/libxgwx"]
+libxgwx = { path = "/path/to/libxgwx" }
 ```
+
+Run Cargo without `--locked` once to update the local lockfile; restore
+`Cargo.lock` before committing unless deliberately updating the pinned dependency.
+Tests and instruction-guide tools resolve the actual library source through
+Cargo metadata, including local overrides. Public fixture data stays in the
+library's own checkout. Instruction generation also accepts `--library-root`.
 
 This server tracks 123 public writers in its coverage manifest. An older library
 may not build; newer public writers need corresponding server adapters before
@@ -91,7 +99,7 @@ python3 skills/xgwx-edit/scripts/find_instruction.py 'ULOADD<'
 python3 skills/xgwx-edit/scripts/find_instruction.py --query 'timer'
 ```
 
-The lookup helper, manifest and instruction files travel with the installable skill. Generation uses the original local manual and the sibling library. It can verify metadata through the release server without editing projects:
+The lookup helper, manifest and instruction files travel with the installable skill. Generation uses the original local manual and the Cargo-resolved library. It can verify metadata through the release server without editing projects:
 
 ```bash
 python3 scripts/generate_instruction_skills.py \

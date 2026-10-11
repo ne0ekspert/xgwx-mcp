@@ -10,3 +10,6 @@ mod sfc_ir;
 pub mod templates;
 
 pub mod property_ir;
+
+#[cfg(test)]
+mod test_support;

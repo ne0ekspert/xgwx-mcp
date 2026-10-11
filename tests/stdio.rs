@@ -1,3 +1,5 @@
+#[path = "../src/test_support.rs"]
+mod test_support;
 use rmcp::{
     ServiceExt,
     model::{CallToolRequestParams, ClientConfig},
@@ -5,16 +7,13 @@ use rmcp::{
 };
 use serde_json::{Value, json};
 use std::fs;
+use test_support::library_root;
 
 #[tokio::test]
 async fn real_stdio_inspection_schema_dry_run_edit_and_validation() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("project.xgwx");
-    let original = fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../libxgwx/fixtures/elements.xgwx"
-    ))
-    .unwrap();
+    let original = fs::read(library_root().join("fixtures/elements.xgwx")).unwrap();
     fs::write(&path, &original).unwrap();
     let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_xgwx-mcp"));
     command.current_dir(dir.path());
@@ -154,10 +153,7 @@ async fn repeatable_root_flags_allow_extra_directories() {
     let second = tempfile::tempdir().unwrap();
     for dir in [&first, &second] {
         fs::copy(
-            concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../libxgwx/fixtures/elements.xgwx"
-            ),
+            library_root().join("fixtures/elements.xgwx"),
             dir.path().join("project.xgwx"),
         )
         .unwrap();
@@ -193,11 +189,7 @@ async fn repeatable_root_flags_allow_extra_directories() {
 #[tokio::test]
 async fn real_stdio_positional_ir_patch_preview_save_and_stale_revision() {
     let dir = tempfile::tempdir().unwrap();
-    let original = fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../libxgwx/fixtures/elements.xgwx"
-    ))
-    .unwrap();
+    let original = fs::read(library_root().join("fixtures/elements.xgwx")).unwrap();
     fs::write(dir.path().join("project.xgwx"), &original).unwrap();
     let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_xgwx-mcp"));
     command.current_dir(dir.path());
@@ -280,11 +272,7 @@ async fn real_stdio_positional_ir_patch_preview_save_and_stale_revision() {
 #[tokio::test]
 async fn real_stdio_blank_program_creation_deletion_and_verified_operation_guidance() {
     let dir = tempfile::tempdir().unwrap();
-    let original = fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../libxgwx/fixtures/empty-projects/new-xgk.xgwx"
-    ))
-    .unwrap();
+    let original = fs::read(library_root().join("fixtures/empty-projects/new-xgk.xgwx")).unwrap();
     fs::write(dir.path().join("blank.xgwx"), &original).unwrap();
     let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_xgwx-mcp"));
     command.current_dir(dir.path());
@@ -402,11 +390,7 @@ async fn real_stdio_blank_program_creation_deletion_and_verified_operation_guida
 #[tokio::test]
 async fn real_stdio_iec_connected_deletion_and_physical_wire_transactions() {
     let dir = tempfile::tempdir().unwrap();
-    let blank = fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../libxgwx/fixtures/empty-projects/new-xgi.xgwx"
-    ))
-    .unwrap();
+    let blank = fs::read(library_root().join("fixtures/empty-projects/new-xgi.xgwx")).unwrap();
     let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_xgwx-mcp"));
     command.current_dir(dir.path());
     let client = ClientConfig::default()
@@ -505,11 +489,8 @@ async fn real_stdio_iec_connected_deletion_and_physical_wire_transactions() {
 #[tokio::test]
 async fn real_stdio_iec_function_patch_preview_save_and_guard_rejection() {
     let dir = tempfile::tempdir().unwrap();
-    let original = fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../libxgwx/fixtures/function-output-wires/base.xgwx"
-    ))
-    .unwrap();
+    let original =
+        fs::read(library_root().join("fixtures/function-output-wires/base.xgwx")).unwrap();
     let path = dir.path().join("project.xgwx");
     fs::write(&path, &original).unwrap();
     let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_xgwx-mcp"));
@@ -616,11 +597,7 @@ async fn real_stdio_iec_function_patch_preview_save_and_guard_rejection() {
 #[tokio::test]
 async fn real_stdio_xgk_instruction_creation_update_backup_and_stale_revision() {
     let dir = tempfile::tempdir().unwrap();
-    let original = fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../libxgwx/fixtures/empty-projects/new-xgk.xgwx"
-    ))
-    .unwrap();
+    let original = fs::read(library_root().join("fixtures/empty-projects/new-xgk.xgwx")).unwrap();
     let path = dir.path().join("project.xgwx");
     fs::write(&path, &original).unwrap();
     let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_xgwx-mcp"));
@@ -739,11 +716,7 @@ async fn real_stdio_xgk_instruction_creation_update_backup_and_stale_revision() 
 #[tokio::test]
 async fn real_stdio_sfc_row_patch_preview_save_and_native_guard_failure() {
     let dir = tempfile::tempdir().unwrap();
-    let original = fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../libxgwx/fixtures/sfc/native-loop.xgwx"
-    ))
-    .unwrap();
+    let original = fs::read(library_root().join("fixtures/sfc/native-loop.xgwx")).unwrap();
     let path = dir.path().join("project.xgwx");
     fs::write(&path, &original).unwrap();
     let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_xgwx-mcp"));
@@ -853,11 +826,7 @@ async fn real_stdio_sfc_row_patch_preview_save_and_native_guard_failure() {
 #[tokio::test]
 async fn real_stdio_sfc_blank_chart_authoring_and_clear_are_verified_transactions() {
     let dir = tempfile::tempdir().unwrap();
-    let original = fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../libxgwx/fixtures/sfc/new-xgi-sfc.xgwx"
-    ))
-    .unwrap();
+    let original = fs::read(library_root().join("fixtures/sfc/new-xgi-sfc.xgwx")).unwrap();
     let path = dir.path().join("project.xgwx");
     fs::write(&path, &original).unwrap();
     let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_xgwx-mcp"));
@@ -1095,11 +1064,9 @@ async fn real_stdio_template_discovery_create_preview_save_and_first_edit() {
 #[tokio::test]
 async fn real_stdio_focused_lists_property_exports_and_guarded_patch_transactions() {
     let dir = tempfile::tempdir().unwrap();
-    let mut doc = xgwx::XgwxDocument::from_path(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../libxgwx/fixtures/empty-projects/new-xgk.xgwx"
-    ))
-    .unwrap();
+    let mut doc =
+        xgwx::XgwxDocument::from_path(library_root().join("fixtures/empty-projects/new-xgk.xgwx"))
+            .unwrap();
     doc.insert_module(0, 0, "XGI-D24A/B").unwrap();
     doc.generate_io_variables().unwrap();
     fs::write(

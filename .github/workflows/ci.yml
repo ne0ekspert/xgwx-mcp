@@ -24,12 +24,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: xgwx-mcp
-      - name: Check out compatible library and fixtures
-        uses: actions/checkout@v4
-        with:
-          repository: ne0ekspert/libxgwx
-          ref: b475c822478287ad31a21536fbf9845b5440351f
-          path: libxgwx
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt

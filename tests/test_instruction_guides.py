@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GUIDES = ROOT / "skills/xgwx-edit/references/instructions"
 sys.path.insert(0, str(ROOT / "scripts"))
 import generate_instruction_skills as generator
-from instruction_support import load_support
+from instruction_support import load_support, resolve_library_root
 
 spec = importlib.util.spec_from_file_location("find_instruction", ROOT / "skills/xgwx-edit/scripts/find_instruction.py")
 finder = importlib.util.module_from_spec(spec)
@@ -27,7 +27,7 @@ class InstructionGuideTests(unittest.TestCase):
         cls.manifest = json.loads((GUIDES / "manifest.json").read_text())
 
     def test_every_catalog_entry_has_exact_callable_guide_identity(self):
-        support = load_support(ROOT.parent / "libxgwx")
+        support = load_support(resolve_library_root())
         core = {name: metadata for name, metadata in support.items()
                 if metadata["kind"] in {"application", "comparison"} and not metadata.get("comparison_alias")}
         self.assertEqual(len(core), self.manifest["core_catalog_count"])
