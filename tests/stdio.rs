@@ -1067,7 +1067,10 @@ async fn real_stdio_focused_lists_property_exports_and_guarded_patch_transaction
     let mut doc =
         xgwx::XgwxDocument::from_path(library_root().join("fixtures/empty-projects/new-xgk.xgwx"))
             .unwrap();
-    doc.insert_module(0, 0, "XGI-D24A/B").unwrap();
+    doc.base_mut()
+        .by_number(0)
+        .and_then(|mut selected_record| selected_record.insert_module(0, "XGI-D24A/B"))
+        .unwrap();
     doc.variable_mut().generate_io_variables().unwrap();
     fs::write(
         dir.path().join("sample.xgwx"),

@@ -19,7 +19,10 @@ fn public_mutators(source: &str) -> BTreeSet<String> {
         || (source.contains("pub struct ModuleEditor<'a>")
             && source.contains("pub struct BaseEditor<'a>"))
         || (source.contains("pub struct NetworkEditor<'a>")
-            && source.contains("pub struct NetworkModuleEditor<'a>"));
+            && source.contains("pub struct NetworkModuleEditor<'a>"))
+        || source.contains("pub struct ConfigurationEditor<'a>")
+        || source.contains("pub struct ProjectEditor<'a>")
+        || source.contains("pub struct GlobalVariableEditor<'a>");
     for tail in source.split("pub fn ").skip(1) {
         let Some(signature_end) = tail.find("->") else {
             continue;
@@ -31,13 +34,25 @@ fn public_mutators(source: &str) -> BTreeSet<String> {
         // Exclusive borrows and editor selection do not mutate project contents.
         if matches!(
             name,
-            "program_mut" | "variable_mut" | "module_mut" | "base_mut" | "network_mut"
+            "program_mut"
+                | "variable_mut"
+                | "module_mut"
+                | "base_mut"
+                | "network_mut"
+                | "configuration_mut"
+                | "project_mut"
+                | "container_mut"
         ) || (selected_api
             && matches!(
                 name,
                 "get" | "iec_ld" | "ladder" | "text" | "sfc" | "vendor_il"
             ))
         {
+            continue;
+        }
+        // Low-level XML replacement has syntax validation only. MCP deliberately
+        // exposes domain operations with native format guards, not arbitrary XML.
+        if name == "replace_xml" && source.contains("pub struct ContainerEditor<'a>") {
             continue;
         }
         if !signature.contains("&mut self") && !(selected_api && name == "delete") {
@@ -71,8 +86,17 @@ fn public_mutators(source: &str) -> BTreeSet<String> {
             .collect::<Vec<_>>();
         if !backends.is_empty() {
             writers.extend(backends);
+        } else if name == "rename" && body.contains("self.rename_if(") {
+            writers.insert("rename_project".into());
+        } else if name == "rename"
+            && body.contains("self.update(")
+            && source.contains("pub struct GlobalVariableEditor<'a>")
+        {
+            writers.insert("update_variable".into());
         } else if name == "rename" && body.contains("self.update(") {
             writers.insert("update_program".into());
+        } else if name == "move_to" && body.contains("self.move_to_if(") {
+            writers.insert("move_program".into());
         } else {
             // A new mutator with no known backend must still fail the audit.
             writers.insert(name.to_owned());
@@ -147,7 +171,7 @@ fn every_adapter_reaches_a_real_library_precondition_without_mutating_the_docume
             continue;
         }
         let mut doc = fixture("empty-projects/new-xgk.xgwx");
-        let before = doc.xml.clone();
+        let before = doc.container().xml().to_owned();
         let result = apply_operation(&mut doc, operation.name, cases[operation.name].clone());
         let error = result.expect_err(operation.name);
         assert!(
@@ -156,7 +180,8 @@ fn every_adapter_reaches_a_real_library_precondition_without_mutating_the_docume
             operation.name
         );
         assert_eq!(
-            doc.xml, before,
+            doc.container().xml(),
+            before,
             "failed writer {} changed document",
             operation.name
         );
@@ -372,10 +397,13 @@ fn iec_symbols_ladder_and_compatibility_aliases_roundtrip() {
     let mut doc = fixture("function-output-wires/base.xgwx");
     // Fixture-derived empty table with a text node, as required by the existing
     // local-symbol writer; the native zero-count fixture omits that node.
-    doc.xml = doc.xml.replace(
-        "<Symbols Count=\"0\"></Symbols>",
-        "<Symbols Count=\"0\"> </Symbols>",
-    );
+    {
+        let replacement_xml = doc.container().xml().replace(
+            "<Symbols Count=\"0\"></Symbols>",
+            "<Symbols Count=\"0\"> </Symbols>",
+        );
+        doc.container_mut().replace_xml(replacement_xml).unwrap();
+    };
     let mut doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
     let last_row = doc
         .program()

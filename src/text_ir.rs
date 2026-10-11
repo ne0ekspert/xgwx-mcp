@@ -496,7 +496,7 @@ impl Projection {
                 .clone()
                 .program_mut()
                 .get(index)
-                .and_then(|mut program| program.ladder()?.insert_row(0));
+                .and_then(|mut selected_program| selected_program.ladder()?.insert_row(0));
 
             let instruction_layout = instruction_probe.is_ok();
             if let Err(reason) = instruction_probe {

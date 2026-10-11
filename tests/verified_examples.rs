@@ -49,7 +49,11 @@ fn executable_examples_succeed_reparse_and_preserve_unrelated_payloads() {
             apply_operation(&mut doc, name, step["args"].clone())
                 .unwrap_or_else(|e| panic!("{id}/{name}: {e}"));
             let reparsed = XgwxDocument::parse(&doc.to_verified_bytes().unwrap()).unwrap();
-            assert_eq!(doc.xml, reparsed.xml, "{id}/{name}");
+            assert_eq!(
+                doc.container().xml(),
+                reparsed.container().xml(),
+                "{id}/{name}"
+            );
             assert_eq!(
                 reparsed.variable().variables().unwrap(),
                 global_symbols,
@@ -164,7 +168,7 @@ fn executable_examples_succeed_reparse_and_preserve_unrelated_payloads() {
             );
         }
         if let Some(name) = expected["network_name"].as_str() {
-            assert_eq!(doc.networks()[0].name.as_deref(), Some(name));
+            assert_eq!(doc.network().list()[0].name.as_deref(), Some(name));
         }
         if let Some(comment) = expected["sfc_step_comment"].as_str() {
             assert_eq!(
@@ -174,7 +178,8 @@ fn executable_examples_succeed_reparse_and_preserve_unrelated_payloads() {
         }
         if let Some(comment) = expected["module_comment"].as_str() {
             assert!(
-                doc.module_summaries()
+                doc.module()
+                    .summaries()
                     .iter()
                     .any(|m| m.comment.as_deref() == Some(comment))
             );

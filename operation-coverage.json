@@ -1,16 +1,17 @@
 {
   "format_version": 1,
-  "source_crate": "https://github.com/ne0ekspert/libxgwx/tree/dcf2264bb2cd5c300703a168b387731c940faceb",
+  "source_crate": "https://github.com/ne0ekspert/libxgwx/tree/b9cd65462fc27809b2ca231ade5ae888757e8b76",
   "public_mutator_count": 123,
   "excluded_helpers": [
     "to_bytes",
     "to_verified_bytes",
-    "write_to"
+    "write_to",
+    "replace_xml"
   ],
   "operations": [
     {
       "public_writer": "edit_browser_hardware",
-      "source": "src/writer.rs",
+      "source": "src/hardware_api.rs",
       "operation": "edit_browser_hardware",
       "adapter": "edit_browser_hardware",
       "subsystem": "hardware",
@@ -18,7 +19,7 @@
     },
     {
       "public_writer": "edit_browser_network",
-      "source": "src/writer.rs",
+      "source": "src/network_api.rs",
       "operation": "edit_browser_network",
       "adapter": "edit_browser_network",
       "subsystem": "networks",
@@ -26,7 +27,7 @@
     },
     {
       "public_writer": "edit_fenet_field",
-      "source": "src/writer.rs",
+      "source": "src/network_api.rs",
       "operation": "edit_fenet_field",
       "adapter": "edit_fenet_field",
       "subsystem": "networks",
@@ -34,7 +35,7 @@
     },
     {
       "public_writer": "select_cpu",
-      "source": "src/writer.rs",
+      "source": "src/configuration_api.rs",
       "operation": "select_cpu",
       "adapter": "select_cpu",
       "subsystem": "hardware",
@@ -42,7 +43,7 @@
     },
     {
       "public_writer": "set_base_slot_count",
-      "source": "src/writer.rs",
+      "source": "src/hardware_api.rs",
       "operation": "set_base_slot_count",
       "adapter": "set_base_slot_count",
       "subsystem": "hardware",
@@ -50,7 +51,7 @@
     },
     {
       "public_writer": "insert_module",
-      "source": "src/writer.rs",
+      "source": "src/hardware_api.rs",
       "operation": "insert_module",
       "adapter": "insert_module",
       "subsystem": "hardware",
@@ -58,7 +59,7 @@
     },
     {
       "public_writer": "delete_module",
-      "source": "src/writer.rs",
+      "source": "src/hardware_api.rs",
       "operation": "delete_module",
       "adapter": "delete_module",
       "subsystem": "hardware",
@@ -66,7 +67,7 @@
     },
     {
       "public_writer": "select_module",
-      "source": "src/writer.rs",
+      "source": "src/hardware_api.rs",
       "operation": "select_module",
       "adapter": "select_module",
       "subsystem": "hardware",
@@ -74,7 +75,7 @@
     },
     {
       "public_writer": "set_module_option",
-      "source": "src/writer.rs",
+      "source": "src/hardware_api.rs",
       "operation": "set_module_option",
       "adapter": "set_module_option",
       "subsystem": "hardware",
@@ -82,7 +83,7 @@
     },
     {
       "public_writer": "update_module",
-      "source": "src/writer.rs",
+      "source": "src/hardware_api.rs",
       "operation": "update_module",
       "adapter": "update_module",
       "subsystem": "hardware",
@@ -90,7 +91,7 @@
     },
     {
       "public_writer": "set_module_input_filter",
-      "source": "src/writer.rs",
+      "source": "src/hardware_api.rs",
       "operation": "set_module_input_filter",
       "adapter": "set_module_input_filter",
       "subsystem": "hardware",
@@ -114,7 +115,7 @@
     },
     {
       "public_writer": "update_network",
-      "source": "src/writer.rs",
+      "source": "src/network_api.rs",
       "operation": "update_network",
       "adapter": "update_network",
       "subsystem": "networks",
@@ -122,7 +123,7 @@
     },
     {
       "public_writer": "update_network_module",
-      "source": "src/writer.rs",
+      "source": "src/network_api.rs",
       "operation": "update_network_module",
       "adapter": "update_network_module",
       "subsystem": "networks",
@@ -138,7 +139,7 @@
     },
     {
       "public_writer": "update_variable",
-      "source": "src/document_api.rs",
+      "source": "src/variable_api.rs",
       "operation": "update_variable",
       "adapter": "update_variable",
       "subsystem": "symbols",
@@ -950,7 +951,7 @@
     },
     {
       "public_writer": "edit_cnet_settings",
-      "source": "src/cnet_write.rs",
+      "source": "src/network_api.rs",
       "operation": "edit_cnet_settings",
       "adapter": "edit_cnet_settings",
       "subsystem": "networks",
@@ -982,7 +983,7 @@
     },
     {
       "public_writer": "rename_project",
-      "source": "src/writer.rs",
+      "source": "src/project_api.rs",
       "operation": "rename_project",
       "adapter": "rename_project",
       "subsystem": "programs",

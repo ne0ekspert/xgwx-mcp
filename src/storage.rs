@@ -204,15 +204,19 @@ impl FileStore {
         ensure_absent(&path)?;
         let mut doc = template.document()?;
         if let Some(model) = cpu_model {
-            doc.select_cpu(model)
+            doc.configuration_mut()
+                .get(0)
+                .and_then(|mut plc| plc.select_cpu(model))
                 .map_err(|e| StoreError::new("cpu_selection_failed", e))?;
         }
         if let Some(name) = &options.project_name {
             let expected = doc
-                .project_name()
+                .project()
+                .name()
                 .ok_or_else(|| StoreError::new("template_error", "missing seed project name"))?
                 .to_owned();
-            doc.rename_project(&expected, name)
+            doc.project_mut()
+                .rename_if(&expected, name)
                 .map_err(|e| StoreError::new("invalid_project_name", e))?;
         }
         if let Some(name) = &options.program_name {
@@ -225,7 +229,7 @@ impl FileStore {
             let renamed = doc
                 .program_mut()
                 .get(0)
-                .and_then(|mut program| program.rename(name));
+                .and_then(|mut selected_program| selected_program.rename(name));
 
             renamed.map_err(|e| StoreError::new("invalid_program_name", e))?;
         }
@@ -261,7 +265,7 @@ impl FileStore {
             create_new_file(&path, &output)?;
         }
         Ok(
-            json!({"path":path,"created":!dry_run,"dry_run":dry_run,"revision_before":null,"revision_after":revision(&output),"backup_path":null,"template":template.metadata()?,"cpu_model":crate::templates::cpu_model(&doc),"project_name":doc.project_name(),"program_name":doc.program().programs().first().and_then(|p| p.name.clone()),"program_language":template.language(),"results":results,"validation":validation}),
+            json!({"path":path,"created":!dry_run,"dry_run":dry_run,"revision_before":null,"revision_after":revision(&output),"backup_path":null,"template":template.metadata()?,"cpu_model":crate::templates::cpu_model(&doc),"project_name":doc.project().name(),"program_name":doc.program().programs().first().and_then(|p| p.name.clone()),"program_language":template.language(),"results":results,"validation":validation}),
         )
     }
 

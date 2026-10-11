@@ -438,7 +438,7 @@ checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
 [[package]]
 name = "libxgwx"
 version = "0.1.0"
-source = "git+https://github.com/ne0ekspert/libxgwx?rev=dcf2264bb2cd5c300703a168b387731c940faceb#dcf2264bb2cd5c300703a168b387731c940faceb"
+source = "git+https://github.com/ne0ekspert/libxgwx?rev=b9cd65462fc27809b2ca231ade5ae888757e8b76#b9cd65462fc27809b2ca231ade5ae888757e8b76"
 dependencies = [
  "base64 0.22.1",
  "bzip2",

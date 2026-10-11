@@ -82,7 +82,7 @@ impl Projection {
         ));
         match section {
             "modules" => {
-                for (i, m) in doc.module_summaries().iter().enumerate() {
+                for (i, m) in doc.module().summaries().iter().enumerate() {
                     p.line(format!(
                         "module @m{i} base {} slot {} {{",
                         literal(&json!(m.base)),
@@ -109,7 +109,11 @@ impl Projection {
                         }),
                     );
                     if let Some((base, slot)) = pos {
-                        match doc.module_option_values(base, slot) {
+                        match doc
+                            .module()
+                            .at(base, slot)
+                            .and_then(|selected_record| selected_record.option_values())
+                        {
                             Ok(values) => {
                                 for v in values {
                                     p.field(&format!("option.{}.{}",v.key,v.index),json!(v.value),Some(Binding::new("set_module_option",json!({"base":base,"slot":slot,"key":v.key,"index":v.index}), &["value"])));
@@ -217,7 +221,7 @@ impl Projection {
                 }
             }
             "networks" => {
-                for (n, net) in doc.networks().iter().enumerate() {
+                for (n, net) in doc.network().list().iter().enumerate() {
                     p.line(format!("network @n{n} {{"));
                     p.field("name",json!(net.name),Some(Binding::new("edit_browser_network",json!({"patch":{"network_index":n,"module":false,"base":null,"slot":null,"field":"name","expected_value":net.name}}), &["patch","replacement"])));
                     p.field("type", json!(net.type_name), None);

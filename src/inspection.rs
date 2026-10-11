@@ -271,7 +271,7 @@ fn hardware_bases(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
 }
 
 fn hardware(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
-    let modules = doc.module_summaries();
+    let modules = doc.module().summaries();
     let selections = modules
         .iter()
         .map(|m| {
@@ -284,7 +284,11 @@ fn hardware(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
                 .unwrap_or(Value::Null);
             result["input_filter_label"] = m.input_filter.map(|filter| filter.to_string()).into();
             result["option_values"] = match (m.base, m.slot) {
-                (Some(base), Some(slot)) => match doc.module_option_values(base, slot) {
+                (Some(base), Some(slot)) => match doc
+                    .module()
+                    .at(base, slot)
+                    .and_then(|selected_record| selected_record.option_values())
+                {
                     Ok(options) => json!({"status": "decoded", "items": options.iter()
                     .map(|o| fields!(o; key, index, value)).collect::<Vec<_>>()}),
                     Err(error) => json!({"status": "unsupported", "error": error.to_string()}),
@@ -295,11 +299,11 @@ fn hardware(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
         })
         .collect::<Vec<_>>();
     json!({
-        "configurations": page(&doc.configurations(), offset, limit, configuration),
+        "configurations": page(&doc.configuration().list(), offset, limit, configuration),
         "bases": hardware_bases(doc, offset, limit),
         "typed_modules": typed_modules(doc, offset, limit),
         "modules": page(&selections, offset, limit, Clone::clone),
-        "cpu_hardware_profile": doc.cpu_hardware_profile().map(|p| fields!(p;
+        "cpu_hardware_profile": doc.configuration().get(0).ok().and_then(|plc| plc.hardware_profile()).map(|p| fields!(p;
             cpu_model, variant, builtin_io_base, builtin_io_slot, builtin_io_id,
             builtin_io_sub_types, builtin_network_id, builtin_network_option_type,
             expansion_catalog_supported)),
@@ -341,15 +345,15 @@ fn ipv4(value: &Option<Ipv4Summary>) -> Value {
 
 fn networks(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
     json!({
-        "networks": indexed_page(&doc.networks(), offset, limit, |index, network| {
+        "networks": indexed_page(&doc.network().list(), offset, limit, |index, network| {
             let mut result = fields!(network; name, type_name, network_type);
             result["network_index"] = json!(index);
             result["attributes"] = attrs(&network.attributes);
             result["modules"] = indexed_page(&network.modules, offset, limit, network_module);
             result
         }),
-        "network_modules": indexed_page(&doc.network_modules(), offset, limit, network_module),
-        "xgpd_config_infos": indexed_page(&doc.xgpd_config_infos(), offset, limit, |index, value| {
+        "network_modules": indexed_page(&doc.network().module_summaries(), offset, limit, network_module),
+        "xgpd_config_infos": indexed_page(&doc.network().config_infos(), offset, limit, |index, value| {
             let mut result = fields!(value; kind, station_no, type_code, base, slot, sub_type);
             result["config_index"] = json!(index);
             result["attributes"] = attrs(&value.attributes);
@@ -728,18 +732,18 @@ pub fn inspect(
     }
     Ok(match section {
         "overview" => {
-            let project = doc.project_info();
+            let project = doc.project().info();
             let mut info = fields!(&project; name, attribute, version, comment, wks_node_count,
                 guid, file_version, file_last_write_time);
             info["attributes"] = attrs(&project.attributes);
             json!({
                 "project": info,
-                "header": fields!(&doc.header; gzip_offset, signature, label, label_following_u32, compressed_size_hint),
-                "container": {"xml_length": doc.xml.len(), "main_gzip_length": doc.main_gzip.len(),
-                    "trailer_length": doc.trailer.len(), "trailer_gzip_members": doc.trailer_gzip_members.len()},
+                "header": fields!(&doc.container().header(); gzip_offset, signature, label, label_following_u32, compressed_size_hint),
+                "container": {"xml_length": doc.container().xml().len(), "main_gzip_length": doc.container().main_gzip().len(),
+                    "trailer_length": doc.container().trailer().len(), "trailer_gzip_members": doc.container().trailer_gzip_members().len()},
                 "counts": {"programs": doc.program().programs().len(), "tasks": doc.program().tasks().len(),
-                    "modules": doc.module_summaries().len(), "networks": doc.networks().len(), "sfc_programs": doc.program().sfc_programs().len(), "text_programs":doc.program().text_programs().len()},
-                "configurations": page(&doc.configurations(), offset, limit, configuration),
+                    "modules": doc.module().summaries().len(), "networks": doc.network().list().len(), "sfc_programs": doc.program().sfc_programs().len(), "text_programs":doc.program().text_programs().len()},
+                "configurations": page(&doc.configuration().list(), offset, limit, configuration),
                 "programs": indexed_page(&doc.program().programs(), offset, limit, program_summary),
                 "sections": SECTIONS,
                 "pagination": "offset/limit apply to each list independently. Collect all pages before constructing expected SFC entity/row/variable lists.",

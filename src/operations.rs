@@ -157,8 +157,29 @@ fn execute_edit_browser_hardware(
     doc: &mut XgwxDocument,
     args: &EditBrowserHardwareArgs,
 ) -> Result<(), String> {
-    doc.edit_browser_hardware(&args.patch.clone().into())
-        .map_err(|error| error.to_string())
+    (|| {
+        let patch: xgwx::BrowserHardwarePatch = args.patch.clone().into();
+
+        if patch.operation == "slotCount" {
+            doc.base_mut()
+                .by_number(patch.base)?
+                .edit_slot_count(&patch.expected_value, &patch.replacement)
+        } else {
+            let slot = patch.slot.ok_or_else(|| {
+                xgwx::XgwxError::BrowserHardwareEdit("missing module slot".into())
+            })?;
+            doc.module_mut()
+                .at(patch.base, slot)?
+                .edit_field(&xgwx::ModuleFieldEdit {
+                    operation: patch.operation.clone(),
+                    expected_value: patch.expected_value.clone(),
+                    replacement: patch.replacement.clone(),
+                    key: patch.key.clone(),
+                    index: patch.index,
+                })
+        }
+    })()
+    .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -184,8 +205,35 @@ fn execute_edit_browser_network(
     doc: &mut XgwxDocument,
     args: &EditBrowserNetworkArgs,
 ) -> Result<(), String> {
-    doc.edit_browser_network(&args.patch.clone().into())
-        .map_err(|error| error.to_string())
+    (|| {
+        let patch: xgwx::BrowserNetworkPatch = args.patch.clone().into();
+
+        let edit = xgwx::NetworkFieldEdit {
+            field: patch.field.clone(),
+            expected_value: patch.expected_value.clone(),
+            replacement: patch.replacement.clone(),
+        };
+        if patch.module {
+            let (Some(base), Some(slot)) = (patch.base, patch.slot) else {
+                return Err(xgwx::XgwxError::BrowserNetworkEdit(
+                    "missing membership coordinates".into(),
+                ));
+            };
+            let member = doc.network().module_at(base, slot)?;
+            if member.network().map(|network| network.index()) != Some(patch.network_index) {
+                return Err(xgwx::XgwxError::BrowserNetworkEdit(
+                    "membership belongs to another network".into(),
+                ));
+            }
+            let index = member.index();
+            doc.network_mut().module(index)?.edit_field(&edit)
+        } else {
+            doc.network_mut()
+                .get(patch.network_index)?
+                .edit_field(&edit)
+        }
+    })()
+    .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -211,8 +259,19 @@ fn execute_edit_fenet_field(
     doc: &mut XgwxDocument,
     args: &EditFenetFieldArgs,
 ) -> Result<(), String> {
-    doc.edit_fenet_field(&args.patch.clone().into())
-        .map_err(|error| error.to_string())
+    (|| {
+        let patch: xgwx::FenetFieldPatch = args.patch.clone().into();
+
+        doc.network_mut()
+            .module_at(patch.base, patch.slot)?
+            .fenet()?
+            .edit_field(&xgwx::NetworkFieldEdit {
+                field: patch.field.clone(),
+                expected_value: patch.expected_value.clone(),
+                replacement: patch.replacement.clone(),
+            })
+    })()
+    .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -235,7 +294,9 @@ fn apply_select_cpu(doc: &mut XgwxDocument, args: Value) -> Result<(), String> {
 }
 
 fn execute_select_cpu(doc: &mut XgwxDocument, args: &SelectCpuArgs) -> Result<(), String> {
-    doc.select_cpu(&args.model)
+    doc.configuration_mut()
+        .get(0)
+        .and_then(|mut plc| plc.select_cpu(&args.model))
         .map_err(|error| error.to_string())
 }
 
@@ -263,7 +324,9 @@ fn execute_set_base_slot_count(
     doc: &mut XgwxDocument,
     args: &SetBaseSlotCountArgs,
 ) -> Result<(), String> {
-    doc.set_base_slot_count(args.base, args.slot_count)
+    doc.base_mut()
+        .by_number(args.base)
+        .and_then(|mut selected_record| selected_record.set_slot_count(args.slot_count))
         .map_err(|error| error.to_string())
 }
 
@@ -289,7 +352,9 @@ fn apply_insert_module(doc: &mut XgwxDocument, args: Value) -> Result<(), String
 }
 
 fn execute_insert_module(doc: &mut XgwxDocument, args: &InsertModuleArgs) -> Result<(), String> {
-    doc.insert_module(args.base, args.slot, &args.model)
+    doc.base_mut()
+        .by_number(args.base)
+        .and_then(|mut selected_record| selected_record.insert_module(args.slot, &args.model))
         .map_err(|error| error.to_string())
 }
 
@@ -314,7 +379,9 @@ fn apply_delete_module(doc: &mut XgwxDocument, args: Value) -> Result<(), String
 }
 
 fn execute_delete_module(doc: &mut XgwxDocument, args: &DeleteModuleArgs) -> Result<(), String> {
-    doc.delete_module(args.base, args.slot)
+    doc.module_mut()
+        .at(args.base, args.slot)
+        .and_then(|selected_record| selected_record.delete())
         .map_err(|error| error.to_string())
 }
 
@@ -340,7 +407,9 @@ fn apply_select_module(doc: &mut XgwxDocument, args: Value) -> Result<(), String
 }
 
 fn execute_select_module(doc: &mut XgwxDocument, args: &SelectModuleArgs) -> Result<(), String> {
-    doc.select_module(args.base, args.slot, &args.model)
+    doc.module_mut()
+        .at(args.base, args.slot)
+        .and_then(|mut selected_record| selected_record.select_model(&args.model))
         .map_err(|error| error.to_string())
 }
 
@@ -371,7 +440,11 @@ fn execute_set_module_option(
     doc: &mut XgwxDocument,
     args: &SetModuleOptionArgs,
 ) -> Result<(), String> {
-    doc.set_module_option(args.base, args.slot, &args.key, args.index, args.value)
+    doc.module_mut()
+        .at(args.base, args.slot)
+        .and_then(|mut selected_record| {
+            selected_record.set_option(&args.key, args.index, args.value)
+        })
         .map_err(|error| error.to_string())
 }
 
@@ -397,7 +470,9 @@ fn apply_update_module(doc: &mut XgwxDocument, args: Value) -> Result<(), String
 }
 
 fn execute_update_module(doc: &mut XgwxDocument, args: &UpdateModuleArgs) -> Result<(), String> {
-    doc.update_module(args.base, args.slot, &args.patch.clone().into())
+    doc.module_mut()
+        .at(args.base, args.slot)
+        .and_then(|mut selected_record| selected_record.update(&args.patch.clone().into()))
         .map_err(|error| error.to_string())
 }
 
@@ -427,7 +502,11 @@ fn execute_set_module_input_filter(
     doc: &mut XgwxDocument,
     args: &SetModuleInputFilterArgs,
 ) -> Result<(), String> {
-    doc.set_module_input_filter(args.base, args.slot, args.filter.clone().into())
+    doc.module_mut()
+        .at(args.base, args.slot)
+        .and_then(|mut selected_record| {
+            selected_record.set_input_filter(args.filter.clone().into())
+        })
         .map_err(|error| error.to_string())
 }
 
@@ -457,7 +536,11 @@ fn execute_edit_browser_iec(
 ) -> Result<(), String> {
     doc.program_mut()
         .get(args.index)
-        .and_then(|mut program| program.iec_ld()?.edit_browser(&args.patch.clone().into()))
+        .and_then(|mut selected_program| {
+            selected_program
+                .iec_ld()?
+                .edit_browser(&args.patch.clone().into())
+        })
         .map_err(|error| error.to_string())
 }
 
@@ -475,7 +558,8 @@ fn example_rename_project() -> Value {
 }
 fn apply_rename_project(doc: &mut XgwxDocument, args: Value) -> Result<(), String> {
     let args: RenameProjectArgs = parse_args("rename_project", args)?;
-    doc.rename_project(&args.expected_name, &args.name)
+    doc.project_mut()
+        .rename_if(&args.expected_name, &args.name)
         .map_err(|e| e.to_string())
 }
 
@@ -502,7 +586,7 @@ fn apply_update_program(doc: &mut XgwxDocument, args: Value) -> Result<(), Strin
 fn execute_update_program(doc: &mut XgwxDocument, args: &UpdateProgramArgs) -> Result<(), String> {
     doc.program_mut()
         .get(args.program_index)
-        .and_then(|mut program| program.update(&args.patch.clone().into()))
+        .and_then(|mut selected_program| selected_program.update(&args.patch.clone().into()))
         .map_err(|error| error.to_string())
 }
 
@@ -527,7 +611,9 @@ fn apply_update_network(doc: &mut XgwxDocument, args: Value) -> Result<(), Strin
 }
 
 fn execute_update_network(doc: &mut XgwxDocument, args: &UpdateNetworkArgs) -> Result<(), String> {
-    doc.update_network(args.network_index, &args.patch.clone().into())
+    doc.network_mut()
+        .get(args.network_index)
+        .and_then(|mut selected_record| selected_record.update(&args.patch.clone().into()))
         .map_err(|error| error.to_string())
 }
 
@@ -556,7 +642,9 @@ fn execute_update_network_module(
     doc: &mut XgwxDocument,
     args: &UpdateNetworkModuleArgs,
 ) -> Result<(), String> {
-    doc.update_network_module(args.base, args.slot, &args.patch.clone().into())
+    doc.network_mut()
+        .module_at(args.base, args.slot)
+        .and_then(|mut selected_record| selected_record.update(&args.patch.clone().into()))
         .map_err(|error| error.to_string())
 }
 
@@ -612,7 +700,8 @@ fn execute_update_variable(
     args: &UpdateVariableArgs,
 ) -> Result<(), String> {
     doc.variable_mut()
-        .update_variable(args.variable_index, &args.patch.clone().into())
+        .get(args.variable_index)
+        .and_then(|mut variable| variable.update(&args.patch.clone().into()))
         .map_err(|error| error.to_string())
 }
 
@@ -1408,7 +1497,11 @@ fn execute_insert_iec_ld_blank_row(
 ) -> Result<(), String> {
     doc.program_mut()
         .get(args.program_index)
-        .and_then(|mut program| program.iec_ld()?.insert_blank_row(args.after_row_index))
+        .and_then(|mut selected_program| {
+            selected_program
+                .iec_ld()?
+                .insert_blank_row(args.after_row_index)
+        })
         .map_err(|error| error.to_string())
 }
 
@@ -1526,7 +1619,11 @@ fn execute_delete_iec_ld_blank_row(
 ) -> Result<(), String> {
     doc.program_mut()
         .get(args.program_index)
-        .and_then(|mut program| program.iec_ld()?.delete_blank_row(args.blank_row_index))
+        .and_then(|mut selected_program| {
+            selected_program
+                .iec_ld()?
+                .delete_blank_row(args.blank_row_index)
+        })
         .map_err(|error| error.to_string())
 }
 
@@ -3882,7 +3979,11 @@ fn execute_repair_iec_ld_heating_chain_x3_eq_deletion(
 ) -> Result<(), String> {
     doc.program_mut()
         .get(args.program_index)
-        .and_then(|mut program| program.iec_ld()?.repair_heating_chain_x3_eq_deletion())
+        .and_then(|mut selected_program| {
+            selected_program
+                .iec_ld()?
+                .repair_heating_chain_x3_eq_deletion()
+        })
         .map_err(|error| error.to_string())
 }
 
@@ -4078,7 +4179,11 @@ fn execute_edit_ladder_cell(
 ) -> Result<(), String> {
     doc.program_mut()
         .get(args.program_index)
-        .and_then(|mut program| program.ladder()?.edit_cell(&args.edit.clone().into()))
+        .and_then(|mut selected_program| {
+            selected_program
+                .ladder()?
+                .edit_cell(&args.edit.clone().into())
+        })
         .map_err(|error| error.to_string())
 }
 
@@ -4258,7 +4363,11 @@ fn execute_edit_ladder_comment(
 ) -> Result<(), String> {
     doc.program_mut()
         .get(args.program_index)
-        .and_then(|mut program| program.ladder()?.edit_comment(&args.edit.clone().into()))
+        .and_then(|mut selected_program| {
+            selected_program
+                .ladder()?
+                .edit_comment(&args.edit.clone().into())
+        })
         .map_err(|error| error.to_string())
 }
 
@@ -4324,7 +4433,11 @@ fn execute_edit_ladder_branch(
 ) -> Result<(), String> {
     doc.program_mut()
         .get(args.program_index)
-        .and_then(|mut program| program.ladder()?.edit_branch(&args.edit.clone().into()))
+        .and_then(|mut selected_program| {
+            selected_program
+                .ladder()?
+                .edit_branch(&args.edit.clone().into())
+        })
         .map_err(|error| error.to_string())
 }
 
@@ -4354,7 +4467,7 @@ fn execute_insert_ladder_row(
 ) -> Result<(), String> {
     doc.program_mut()
         .get(args.program_index)
-        .and_then(|mut program| program.ladder()?.insert_row(args.raw_y))
+        .and_then(|mut selected_program| selected_program.ladder()?.insert_row(args.raw_y))
         .map_err(|error| error.to_string())
 }
 
@@ -4487,8 +4600,15 @@ fn execute_edit_cnet_settings(
     doc: &mut XgwxDocument,
     args: &EditCnetSettingsArgs,
 ) -> Result<(), String> {
-    doc.edit_cnet_settings(&args.patch.clone().into())
-        .map_err(|error| error.to_string())
+    (|| {
+        let patch: xgwx::CnetSettingsPatch = args.patch.clone().into();
+
+        doc.network_mut()
+            .module_at(patch.base, patch.slot)?
+            .cnet()?
+            .edit_settings(&patch.changes)
+    })()
+    .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]

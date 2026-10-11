@@ -45,7 +45,11 @@ fn library_generated_profiles_and_cpu_discovery_are_guarded() {
         );
         for model in entry["selectable_cpu_models"].as_array().unwrap() {
             let mut selected = doc.clone();
-            selected.select_cpu(model.as_str().unwrap()).unwrap();
+            selected
+                .configuration_mut()
+                .get(0)
+                .and_then(|mut plc| plc.select_cpu(model.as_str().unwrap()))
+                .unwrap();
             selected.to_verified_bytes().unwrap();
         }
     }
@@ -72,7 +76,7 @@ fn create_all_templates_preview_atomic_save_then_existing_edit_backup() {
         let bytes = fs::read(dir.path().join(name)).unwrap();
         assert_eq!(revision(&bytes), saved["revision_after"].as_str().unwrap());
         let doc = XgwxDocument::parse(&bytes).unwrap();
-        assert_eq!(doc.project_info().name.as_deref(), Some("NewProject"));
+        assert_eq!(doc.project().info().name.as_deref(), Some("NewProject"));
         doc.to_verified_bytes().unwrap();
         #[cfg(unix)]
         {
@@ -323,7 +327,7 @@ fn native_style_choices_name_path_cpu_and_language_resolve_verified_projects() {
     let saved = store.create_project(&options).unwrap();
     assert_eq!(preview["revision_after"], saved["revision_after"]);
     let doc = XgwxDocument::from_path(dir.path().join("named.xgwx")).unwrap();
-    assert_eq!(doc.project_name(), Some("공장 & <Line 1>"));
+    assert_eq!(doc.project().name(), Some("공장 & <Line 1>"));
     assert_eq!(doc.program().programs()[0].name.as_deref(), Some("Main"));
     assert_eq!(doc.program().sfc_programs().len(), 1);
     let count = fs::read_dir(dir.path()).unwrap().count();

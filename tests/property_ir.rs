@@ -49,8 +49,14 @@ fn apply(doc: &mut XgwxDocument, section: &str, program: Option<usize>, changes:
 #[test]
 fn module_properties_preserve_program_and_symbols_and_enforce_catalog_values() {
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
-    doc.insert_module(0, 0, "XGI-D24A/B").unwrap();
-    doc.insert_module(0, 1, "XGQ-RY2A/B").unwrap();
+    doc.base_mut()
+        .by_number(0)
+        .and_then(|mut selected_record| selected_record.insert_module(0, "XGI-D24A/B"))
+        .unwrap();
+    doc.base_mut()
+        .by_number(0)
+        .and_then(|mut selected_record| selected_record.insert_module(1, "XGQ-RY2A/B"))
+        .unwrap();
     let program = doc.program().ladder_program(0).unwrap().unwrap().data;
     let vars = doc.variable().variables().unwrap();
     apply(
@@ -66,10 +72,17 @@ fn module_properties_preserve_program_and_symbols_and_enforce_catalog_values() {
         ],
     );
     assert_eq!(
-        doc.module_summaries()[0].comment.as_deref(),
+        doc.module().summaries()[0].comment.as_deref(),
         Some("Tank inputs")
     );
-    assert_eq!(doc.module_option_values(0, 0).unwrap()[0].value, 3);
+    assert_eq!(
+        doc.module()
+            .at(0, 0)
+            .and_then(|selected_record| selected_record.option_values())
+            .unwrap()[0]
+            .value,
+        3
+    );
     assert_eq!(
         doc.program().ladder_program(0).unwrap().unwrap().data,
         program
@@ -85,16 +98,19 @@ fn module_properties_preserve_program_and_symbols_and_enforce_catalog_values() {
             )],
         ))
         .unwrap();
-    let before = doc.xml.clone();
+    let before = doc.container().xml().to_owned();
     assert!(
         xgwx_mcp::operations::apply_operation(&mut doc, &ops[0].name, ops[0].args.clone()).is_err()
     );
-    assert_eq!(doc.xml, before);
+    assert_eq!(doc.container().xml(), before);
 }
 #[test]
 fn global_metadata_changes_coalesce_into_one_writer_and_preserve_program() {
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
-    doc.insert_module(0, 0, "XGI-D21A").unwrap();
+    doc.base_mut()
+        .by_number(0)
+        .and_then(|mut selected_record| selected_record.insert_module(0, "XGI-D21A"))
+        .unwrap();
     doc.variable_mut().generate_io_variables().unwrap();
     let ir = Projection::export(&doc, "revision", "variables", None).unwrap();
     let vars = doc.variable().variables().unwrap();
@@ -132,13 +148,21 @@ fn local_descriptions_and_single_rename_are_guarded_and_reexported() {
     let doc = fixture("function-output-wires/base.xgwx");
     let mut doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
     // The public insertion writer needs the captured empty table's text node.
-    doc.xml = doc.xml.replace(
-        "<Symbols Count=\"0\"></Symbols>",
-        "<Symbols Count=\"0\"> </Symbols>",
-    );
+    {
+        let replacement_xml = doc.container().xml().replace(
+            "<Symbols Count=\"0\"></Symbols>",
+            "<Symbols Count=\"0\"> </Symbols>",
+        );
+        doc.container_mut().replace_xml(replacement_xml).unwrap();
+    };
     let mut doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
-    doc.variable_mut()
-        .insert_iec_local_symbol(0, "AgentContact", "BOOL", "Input")
+    doc.program_mut()
+        .get(0)
+        .and_then(|mut selected_program| {
+            selected_program
+                .variable_mut()
+                .insert("AgentContact", "BOOL", "Input")
+        })
         .unwrap();
     apply(
         &mut doc,
@@ -183,7 +207,10 @@ fn local_descriptions_and_single_rename_are_guarded_and_reexported() {
 #[test]
 fn network_metadata_fenet_and_grouped_cnet_settings_preserve_other_payloads() {
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
-    doc.insert_module(0, 0, "XGL-EFMT(B)").unwrap();
+    doc.base_mut()
+        .by_number(0)
+        .and_then(|mut selected_record| selected_record.insert_module(0, "XGL-EFMT(B)"))
+        .unwrap();
     let program = doc.program().ladder_program(0).unwrap().unwrap().data;
     apply(
         &mut doc,
@@ -207,14 +234,17 @@ fn network_metadata_fenet_and_grouped_cnet_settings_preserve_other_payloads() {
     );
     assert_eq!(doc.network().fenet_config_infos()[0].dhcp, Some(1));
     let ir = Projection::export(&doc, "revision", "networks", None).unwrap();
-    let old = format!("  edit name = {}", json!(doc.networks()[0].name));
+    let old = format!("  edit name = {}", json!(doc.network().list()[0].name));
     apply(
         &mut doc,
         "networks",
         None,
         &[(&old, "  edit name = \"Plant network\"")],
     );
-    assert_eq!(doc.networks()[0].name.as_deref(), Some("Plant network"));
+    assert_eq!(
+        doc.network().list()[0].name.as_deref(),
+        Some("Plant network")
+    );
     assert!(ir.text.contains("network_module"));
     assert_eq!(
         doc.program().ladder_program(0).unwrap().unwrap().data,
@@ -254,7 +284,10 @@ fn property_transactions_preview_backup_stale_rollback_and_noop() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("sample.xgwx");
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
-    doc.insert_module(0, 0, "XGI-D24A/B").unwrap();
+    doc.base_mut()
+        .by_number(0)
+        .and_then(|mut selected_record| selected_record.insert_module(0, "XGI-D24A/B"))
+        .unwrap();
     let bytes = doc.to_verified_bytes().unwrap();
     fs::write(&path, &bytes).unwrap();
     let store = FileStore::new(dir.path().into(), vec![]).unwrap();
@@ -326,7 +359,10 @@ fn property_transactions_preview_backup_stale_rollback_and_noop() {
 #[test]
 fn property_frozen_identity_shape_type_and_literal_guards() {
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
-    doc.insert_module(0, 0, "XGI-D24A/B").unwrap();
+    doc.base_mut()
+        .by_number(0)
+        .and_then(|mut selected_record| selected_record.insert_module(0, "XGI-D24A/B"))
+        .unwrap();
     let ir = Projection::export(&doc, "revision", "modules", None).unwrap();
     for (old, new) in [
         ("module @m0 base 0 slot 0 {", "module @m0 base 0 slot 1 {"),

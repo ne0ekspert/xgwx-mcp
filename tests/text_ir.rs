@@ -376,10 +376,13 @@ fn symbol_description_changes_and_writer_failure_rollback() {
 fn iec_multiple_resizing_operands_kinds_and_local_descriptions() {
     use serde_json::json;
     let mut doc = fixture("function-output-wires/base.xgwx");
-    doc.xml = doc.xml.replace(
-        "<Symbols Count=\"0\"></Symbols>",
-        "<Symbols Count=\"0\"> </Symbols>",
-    );
+    {
+        let replacement_xml = doc.container().xml().replace(
+            "<Symbols Count=\"0\"></Symbols>",
+            "<Symbols Count=\"0\"> </Symbols>",
+        );
+        doc.container_mut().replace_xml(replacement_xml).unwrap();
+    };
     let mut doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
     for name in [
         "Input",
@@ -622,7 +625,7 @@ fn iec_native_comment_text_uses_the_comment_string_source_mapping() {
     } else {
         data
     };
-    let parsed = roxmltree::Document::parse(&doc.xml).unwrap();
+    let parsed = roxmltree::Document::parse(&doc.container().xml()).unwrap();
     let node = parsed
         .descendants()
         .find(|n| n.has_tag_name("Program"))
@@ -631,10 +634,12 @@ fn iec_native_comment_text_uses_the_comment_string_source_mapping() {
         .find(|n| n.has_tag_name("ProgramData"))
         .unwrap();
     let range = node.children().find(|n| n.is_text()).unwrap().range();
-    doc.xml.replace_range(
+    let mut replacement_xml = doc.container().xml().to_owned();
+    replacement_xml.replace_range(
         range,
         &base64::engine::general_purpose::STANDARD.encode(encoded),
     );
+    doc.container_mut().replace_xml(replacement_xml).unwrap();
     let doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
     assert_eq!(
         doc.program().ladder_program(0).unwrap().unwrap().data[record.offset + 1],
@@ -1804,7 +1809,7 @@ fn xgk_unsupported_native_instruction_layout_stays_read_only() {
     } else {
         data
     };
-    let parsed = roxmltree::Document::parse(&doc.xml).unwrap();
+    let parsed = roxmltree::Document::parse(&doc.container().xml()).unwrap();
     let node = parsed
         .descendants()
         .find(|n| n.has_tag_name("Program"))
@@ -1813,11 +1818,19 @@ fn xgk_unsupported_native_instruction_layout_stays_read_only() {
         .find(|n| n.has_tag_name("ProgramData"))
         .unwrap();
     let range = node.children().find(|n| n.is_text()).unwrap().range();
-    doc.xml.replace_range(
+    let mut replacement_xml = doc.container().xml().to_owned();
+    replacement_xml.replace_range(
         range,
         &base64::engine::general_purpose::STANDARD.encode(encoded),
     );
-    assert!(doc.clone().program_mut().insert_ladder_row(0, 0).is_err());
+    doc.container_mut().replace_xml(replacement_xml).unwrap();
+    assert!(
+        doc.clone()
+            .program_mut()
+            .get(0)
+            .and_then(|mut selected_program| selected_program.ladder()?.insert_row(0))
+            .is_err()
+    );
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     assert!(
         !ir.text
@@ -2031,9 +2044,13 @@ fn sfc_multiple_declaration_descriptions_rebase_complete_snapshots() {
 #[test]
 fn sfc_unsupported_chart_retains_opaque_xml_and_uses_entity_writer() {
     let mut doc = fixture("sfc/native-loop.xgwx");
-    doc.xml = doc
-        .xml
-        .replace("<EntityGrid ", "<EntityGrid AgentOpaque=\"keep\" ");
+    {
+        let replacement_xml = doc
+            .container()
+            .xml()
+            .replace("<EntityGrid ", "<EntityGrid AgentOpaque=\"keep\" ");
+        doc.container_mut().replace_xml(replacement_xml).unwrap();
+    };
     let mut doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
     assert!(
         doc.program().sfc_programs()[0].blocks[0]
@@ -2065,8 +2082,8 @@ fn sfc_unsupported_chart_retains_opaque_xml_and_uses_entity_writer() {
     for op in ops {
         apply(&mut doc, &op.name, op.args);
     }
-    assert!(doc.xml.contains("AgentOpaque=\"keep\""));
-    assert_eq!(doc.xml.matches("Title=\"%MX2\"").count(), 2);
+    assert!(doc.container().xml().contains("AgentOpaque=\"keep\""));
+    assert_eq!(doc.container().xml().matches("Title=\"%MX2\"").count(), 2);
     assert_eq!(locals, doc.variable().sfc_variables(0).unwrap());
     doc.to_verified_bytes().unwrap();
     let moved = ir

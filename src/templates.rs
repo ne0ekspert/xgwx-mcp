@@ -110,7 +110,7 @@ impl ProjectTemplate {
     }
 }
 pub fn cpu_model(doc: &XgwxDocument) -> Option<&'static str> {
-    let code = doc.configurations().first()?.type_code?;
+    let code = doc.configuration().list().first()?.type_code?;
     xgwx::cpu_catalog()
         .iter()
         .find(|c| c.type_code == code)
@@ -142,7 +142,12 @@ pub fn list() -> Result<Value, StoreError> {
         item["selectable_cpu_models"] = json!(
             xgwx::cpu_catalog()
                 .iter()
-                .filter(|c| doc.clone().select_cpu(c.model).is_ok())
+                .filter(|c| doc
+                    .clone()
+                    .configuration_mut()
+                    .get(0)
+                    .and_then(|mut plc| plc.select_cpu(c.model))
+                    .is_ok())
                 .map(|c| c.model)
                 .collect::<Vec<_>>()
         );

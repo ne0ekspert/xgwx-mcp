@@ -4,9 +4,15 @@ use xgwx_mcp::{inspection, property_ir::Projection};
 #[test]
 fn hardware_lists_and_property_indices_remain_installed_hardware_records() {
     let mut doc = create_project("XGK-CPUSN", "LD").unwrap();
-    doc.insert_module(0, 0, "XGL-EFMT(B)").unwrap();
-    doc.insert_module(0, 1, "XGL-EFMT(B)").unwrap();
-    let hardware = doc.module_summaries();
+    doc.base_mut()
+        .by_number(0)
+        .and_then(|mut selected_record| selected_record.insert_module(0, "XGL-EFMT(B)"))
+        .unwrap();
+    doc.base_mut()
+        .by_number(0)
+        .and_then(|mut selected_record| selected_record.insert_module(1, "XGL-EFMT(B)"))
+        .unwrap();
+    let hardware = doc.module().summaries();
     assert_eq!(hardware.len(), 2);
     assert_eq!(hardware[0].slot, Some(0));
     assert_eq!(hardware[1].slot, Some(1));
@@ -30,7 +36,10 @@ fn hardware_lists_and_property_indices_remain_installed_hardware_records() {
 #[test]
 fn scoped_bases_expose_typed_memberships_and_bound_settings() {
     let mut doc = create_project("XGK-CPUSN", "LD").unwrap();
-    doc.insert_module(0, 0, "XGL-EFMT(B)").unwrap();
+    doc.base_mut()
+        .by_number(0)
+        .and_then(|mut selected_record| selected_record.insert_module(0, "XGL-EFMT(B)"))
+        .unwrap();
     let summary = inspection::inspect(&doc, "hardware", None, 0, 100).unwrap();
     let base = &summary["bases"]["items"][0];
     assert_eq!(base["base_index"], 0);

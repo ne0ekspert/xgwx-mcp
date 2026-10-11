@@ -88,17 +88,25 @@ fn source_transactions_preserve_payloads_and_expected_checks() {
             after.program().text_programs()[0].variables,
             doc.program().text_programs()[0].variables
         );
-        assert_eq!(after.module_summaries(), doc.module_summaries());
-        assert_eq!(after.header.signature, doc.header.signature);
-        assert_eq!(after.header.label, doc.header.label);
+        assert_eq!(after.module().summaries(), doc.module().summaries());
+        assert_eq!(
+            after.container().header().signature,
+            doc.container().header().signature
+        );
+        assert_eq!(
+            after.container().header().label,
+            doc.container().header().label
+        );
         // Main-member alignment padding can change; native trailer payload stays exact.
         assert_eq!(
             after
-                .trailer
+                .container()
+                .trailer()
                 .iter()
                 .skip_while(|b| **b == 0)
                 .collect::<Vec<_>>(),
-            doc.trailer
+            doc.container()
+                .trailer()
                 .iter()
                 .skip_while(|b| **b == 0)
                 .collect::<Vec<_>>()
@@ -114,7 +122,10 @@ fn source_transactions_preserve_payloads_and_expected_checks() {
                 .range();
             format!("{}{}", &xml[..range.start], &xml[range.end..])
         };
-        assert_eq!(without_source(&after.xml), without_source(&doc.xml));
+        assert_eq!(
+            without_source(&after.container().xml()),
+            without_source(&doc.container().xml())
+        );
         assert!(store.apply("text.xgwx", rev, &[], false).is_err());
         let current = saved["revision_after"].as_str().unwrap();
         let noop = store
@@ -165,17 +176,12 @@ fn source_ir_preserves_line_endings_identity_and_readonly_layouts() {
                 .is_err()
         );
         let unsupported = doc
-            .xml
+            .container()
+            .xml()
             .replace("Encrytption=\"\"", "Encrytption=\"encrypted\"");
-        let unsupported = XgwxDocument::parse(
-            &XgwxDocument {
-                xml: unsupported,
-                ..doc.clone()
-            }
-            .to_bytes()
-            .unwrap(),
-        )
-        .unwrap();
+        let mut encrypted = doc.clone();
+        encrypted.container_mut().replace_xml(unsupported).unwrap();
+        let unsupported = XgwxDocument::parse(&encrypted.to_bytes().unwrap()).unwrap();
         assert!(!unsupported.program().text_programs()[0].editable);
         let readonly = Projection::export(&unsupported, "revision", 0).unwrap();
         assert!(
@@ -336,7 +342,7 @@ fn vendor_il_updates_native_ladder_and_rejects_iec_or_branch_source() {
         doc.variable().variables().unwrap(),
         initial.variable().variables().unwrap()
     );
-    assert_eq!(doc.module_summaries(), initial.module_summaries());
+    assert_eq!(doc.module().summaries(), initial.module().summaries());
     assert_eq!(doc.program().programs(), initial.program().programs());
     for source in [
         "LD TRUE\nST %MX0",
