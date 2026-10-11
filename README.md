@@ -16,11 +16,40 @@ For local library development, add this override to `.cargo/config.toml`:
 libxgwx = { path = "/path/to/libxgwx" }
 ```
 
-Run Cargo without `--locked` once to update the local lockfile; restore
+Run `cargo update -p libxgwx` to select the override, including when its version
+differs from the pinned library. Restore
 `Cargo.lock` before committing unless deliberately updating the pinned dependency.
 Tests and instruction-guide tools resolve the actual library source through
 Cargo metadata, including local overrides. Public fixture data stays in the
 library's own checkout. Instruction generation also accepts `--library-root`.
+
+For an override selecting the unpublished namespaced API, enable
+`--features libxgwx-namespaced-api` for Cargo builds and tests. The library version
+remains `0.1.0`; the feature selects API capabilities rather than a package
+version. The namespaced API changes `modules()` to a typed list and moves
+installed hardware summaries to `module_summaries()`. The compatibility adapter
+preserves MCP hardware/property indices and listing shapes with either API.
+`bases()` now returns document-bound handles with `base.modules()`; raw base
+records are available as `base_summaries()`. Current-API inspection uses these handles: each hardware base includes its
+`base_index`, `configuration_index`, and paginated typed `modules`. Hardware also
+exposes a document-wide `typed_modules` list, retaining unplaced and ambiguous
+memberships. Installed hardware/property indices remain unchanged. The older
+Git pin reports typed inventory as unavailable rather than guessing scope.
+Default builds continue to use the unchanged Git pin and need no extra feature.
+Program, variable, and protocol configuration adapters also use
+`program()`/`variable()`, their mutable editors, and `network()` for
+`cnet_config_infos()`/`fenet_config_infos()`. The old pinned library gets lightweight
+namespace accessors from the
+compatibility adapter; namespaced builds use the library's actual namespace views.
+The Rust API also supports selected program handles, such as
+`doc.program_mut().get(index)?.iec_ld()?`, with shorter operation names and
+internally bound indices. Current-API dispatchers select these handles for program metadata, lifecycle,
+ladder, ST/IL, SFC, and local-variable edits. They preserve incoming identity,
+language, and expected-value guards while converting to bound patches. Default
+builds keep the pinned API through conditional compatibility branches.
+Operation names, argument schemas, and revision-scoped property indices remain
+the same. Writer coverage audits include the namespace editors and exclude the
+exclusive-borrow accessors themselves.
 
 This server tracks 123 public writers in its coverage manifest. An older library
 may not build; newer public writers need corresponding server adapters before

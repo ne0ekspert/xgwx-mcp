@@ -1,3 +1,5 @@
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use xgwx_mcp::library_compat::DocumentNamespacesCompat;
 #[path = "../src/test_support.rs"]
 mod test_support;
 use rmcp::{
@@ -1068,7 +1070,7 @@ async fn real_stdio_focused_lists_property_exports_and_guarded_patch_transaction
         xgwx::XgwxDocument::from_path(library_root().join("fixtures/empty-projects/new-xgk.xgwx"))
             .unwrap();
     doc.insert_module(0, 0, "XGI-D24A/B").unwrap();
-    doc.generate_io_variables().unwrap();
+    doc.variable_mut().generate_io_variables().unwrap();
     fs::write(
         dir.path().join("sample.xgwx"),
         doc.to_verified_bytes().unwrap(),

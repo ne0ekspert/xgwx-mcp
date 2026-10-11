@@ -1,3 +1,6 @@
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use xgwx_mcp::library_compat::DocumentNamespacesCompat;
+use xgwx_mcp::library_compat::module_summaries;
 #[path = "../src/test_support.rs"]
 mod test_support;
 use serde_json::{Value, json};
@@ -25,14 +28,17 @@ fn executable_examples_succeed_reparse_and_preserve_unrelated_payloads() {
             "fixture changed: {id}"
         );
         let mut doc = XgwxDocument::parse(&bytes).unwrap();
-        let global_symbols = doc.variables().unwrap();
+        let global_symbols = doc.variable().variables().unwrap();
         let retained = case["preserve_programs"]
             .as_array()
             .unwrap()
             .iter()
             .map(|v| {
                 let index = v.as_u64().unwrap() as usize;
-                (index, doc.ladder_program(index).unwrap().unwrap().data)
+                (
+                    index,
+                    doc.program().ladder_program(index).unwrap().unwrap().data,
+                )
             })
             .collect::<Vec<_>>();
         for step in case["setup"]
@@ -48,13 +54,18 @@ fn executable_examples_succeed_reparse_and_preserve_unrelated_payloads() {
             let reparsed = XgwxDocument::parse(&doc.to_verified_bytes().unwrap()).unwrap();
             assert_eq!(doc.xml, reparsed.xml, "{id}/{name}");
             assert_eq!(
-                reparsed.variables().unwrap(),
+                reparsed.variable().variables().unwrap(),
                 global_symbols,
                 "{id}/{name}: unrelated symbols"
             );
             for (index, data) in &retained {
                 assert_eq!(
-                    reparsed.ladder_program(*index).unwrap().unwrap().data,
+                    reparsed
+                        .program()
+                        .ladder_program(*index)
+                        .unwrap()
+                        .unwrap()
+                        .data,
                     *data,
                     "{id}/{name}: unrelated program"
                 );
@@ -62,7 +73,11 @@ fn executable_examples_succeed_reparse_and_preserve_unrelated_payloads() {
         }
         let expected = &case["expect"];
         if let Some(index) = expected["program_index"].as_u64() {
-            let program = doc.ladder_program(index as usize).unwrap().unwrap();
+            let program = doc
+                .program()
+                .ladder_program(index as usize)
+                .unwrap()
+                .unwrap();
             let cells = program
                 .structure
                 .rungs
@@ -132,15 +147,18 @@ fn executable_examples_succeed_reparse_and_preserve_unrelated_payloads() {
             }
         }
         if !expected["program_count"].is_null() {
-            assert_eq!(json!(doc.programs().len()), expected["program_count"]);
             assert_eq!(
-                json!(doc.programs().last().unwrap().name),
+                json!(doc.program().programs().len()),
+                expected["program_count"]
+            );
+            assert_eq!(
+                json!(doc.program().programs().last().unwrap().name),
                 expected["last_program_name"]
             );
         }
         if let Some(ip) = expected["fenet_ip"].as_str() {
             assert_eq!(
-                doc.fenet_config_infos()[0]
+                doc.network().fenet_config_infos()[0]
                     .ip_address
                     .as_ref()
                     .unwrap()
@@ -153,13 +171,13 @@ fn executable_examples_succeed_reparse_and_preserve_unrelated_payloads() {
         }
         if let Some(comment) = expected["sfc_step_comment"].as_str() {
             assert_eq!(
-                doc.sfc_programs()[0].blocks[0].entities[3].properties["EntityStep"]["Comment"],
+                doc.program().sfc_programs()[0].blocks[0].entities[3].properties["EntityStep"]["Comment"],
                 comment
             );
         }
         if let Some(comment) = expected["module_comment"].as_str() {
             assert!(
-                doc.modules()
+                module_summaries(&doc)
                     .iter()
                     .any(|m| m.comment.as_deref() == Some(comment))
             );

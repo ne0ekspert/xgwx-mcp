@@ -1,3 +1,5 @@
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use xgwx_mcp::library_compat::DocumentNamespacesCompat;
 #[path = "../src/test_support.rs"]
 mod test_support;
 use serde_json::{Value, json};
@@ -12,18 +14,67 @@ fn fixture(path: &str) -> XgwxDocument {
 }
 
 fn public_mutators(source: &str) -> BTreeSet<String> {
-    source
-        .split("pub fn ")
-        .skip(1)
-        .filter_map(|tail| {
-            let signature_end = tail.find("->")?;
-            let signature = &tail[..signature_end];
-            if !signature.contains("&mut self") {
-                return None;
-            }
-            Some(signature.split('(').next()?.trim().to_owned())
-        })
-        .collect()
+    let mut writers = BTreeSet::new();
+    // Identify the bound-handle API independently of crate attributes or docs.
+    let selected_api =
+        source.contains("pub struct Program<'a>") && source.contains("pub struct IecLdEditor<'a>");
+    for tail in source.split("pub fn ").skip(1) {
+        let Some(signature_end) = tail.find("->") else {
+            continue;
+        };
+        let signature = &tail[..signature_end];
+        let Some(name) = signature.split('(').next().map(str::trim) else {
+            continue;
+        };
+        // Exclusive borrows and editor selection do not mutate project contents.
+        if matches!(name, "program_mut" | "variable_mut")
+            || (selected_api
+                && matches!(
+                    name,
+                    "get" | "iec_ld" | "ladder" | "text" | "sfc" | "vendor_il"
+                ))
+        {
+            continue;
+        }
+        if !signature.contains("&mut self") && !(selected_api && name == "delete") {
+            continue;
+        }
+        if !selected_api {
+            writers.insert(name.to_owned());
+            continue;
+        }
+        // Selected handles shorten names and bind indices. Audit every backend
+        // invoked by a delegate so they remain covered by the indexed MCP catalog.
+        let body_start = tail.find('{').expect("writer body");
+        let mut depth = 0;
+        let body_end = tail[body_start..]
+            .char_indices()
+            .find_map(|(offset, ch)| {
+                if ch == '{' {
+                    depth += 1;
+                }
+                if ch == '}' {
+                    depth -= 1;
+                }
+                (depth == 0).then_some(body_start + offset)
+            })
+            .expect("writer body closes");
+        let body = &tail[body_start..=body_end];
+        let backends = OPERATIONS
+            .iter()
+            .filter(|operation| body.contains(&format!(".{}(", operation.name)))
+            .map(|operation| operation.name.to_owned())
+            .collect::<Vec<_>>();
+        if !backends.is_empty() {
+            writers.extend(backends);
+        } else if name == "rename" && body.contains("self.update(") {
+            writers.insert("update_program".into());
+        } else {
+            // A new mutator with no known backend must still fail the audit.
+            writers.insert(name.to_owned());
+        }
+    }
+    writers
 }
 
 #[test]
@@ -75,6 +126,14 @@ fn coverage_manifest_matches_all_public_writers_and_callable_adapters() {
         let expected_source =
             std::fs::read_to_string(library_root().join(entry["source"].as_str().unwrap()))
                 .unwrap();
+        #[cfg(feature = "libxgwx-namespaced-api")]
+        let expected_source = if public_mutators(&expected_source).contains(name) {
+            expected_source
+        } else {
+            // The pinned manifest describes the old flat writers. The same
+            // operation names are public on the namespace editors.
+            std::fs::read_to_string(library_root().join("src/document_api.rs")).unwrap()
+        };
         assert!(
             public_mutators(&expected_source).contains(name),
             "wrong manifest source for {name}"
@@ -108,7 +167,7 @@ fn every_adapter_reaches_a_real_library_precondition_without_mutating_the_docume
     }
     let mut doc = fixture("io-variable-generation/base.xgwx");
     apply_operation(&mut doc, "generate_io_variables", json!({})).unwrap();
-    assert_eq!(doc.variables().unwrap().len(), 120);
+    assert_eq!(doc.variable().variables().unwrap().len(), 120);
     doc.to_verified_bytes().unwrap();
 }
 
@@ -194,7 +253,7 @@ fn every_schema_is_strict_and_discoverable_and_filters_work() {
 #[test]
 fn hardware_program_symbol_and_xgk_ladder_adapters_roundtrip_and_preserve_other_payloads() {
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
-    let original_program = doc.ladder_program(0).unwrap().unwrap().data;
+    let original_program = doc.program().ladder_program(0).unwrap().unwrap().data;
     apply_operation(
         &mut doc,
         "insert_module",
@@ -202,12 +261,12 @@ fn hardware_program_symbol_and_xgk_ladder_adapters_roundtrip_and_preserve_other_
     )
     .unwrap();
     apply_operation(&mut doc, "generate_io_variables", json!({})).unwrap();
-    assert!(!doc.variables().unwrap().is_empty());
+    assert!(!doc.variable().variables().unwrap().is_empty());
     assert_eq!(
-        doc.ladder_program(0).unwrap().unwrap().data,
+        doc.program().ladder_program(0).unwrap().unwrap().data,
         original_program
     );
-    let original_variables = doc.variables().unwrap();
+    let original_variables = doc.variable().variables().unwrap();
     apply_operation(
         &mut doc,
         "create_program",
@@ -218,8 +277,8 @@ fn hardware_program_symbol_and_xgk_ladder_adapters_roundtrip_and_preserve_other_
         }}),
     )
     .unwrap();
-    assert_eq!(doc.programs().len(), 2);
-    assert_eq!(doc.variables().unwrap(), original_variables);
+    assert_eq!(doc.program().programs().len(), 2);
+    assert_eq!(doc.variable().variables().unwrap(), original_variables);
     apply_operation(
         &mut doc,
         "update_program",
@@ -253,21 +312,21 @@ fn hardware_program_symbol_and_xgk_ladder_adapters_roundtrip_and_preserve_other_
     )
     .unwrap();
     let reparsed = XgwxDocument::parse(&doc.to_verified_bytes().unwrap()).unwrap();
-    assert_eq!(reparsed.variables().unwrap(), original_variables);
+    assert_eq!(reparsed.variable().variables().unwrap(), original_variables);
     assert_eq!(
-        reparsed.ladder_program(0).unwrap().unwrap().data,
+        reparsed.program().ladder_program(0).unwrap().unwrap().data,
         original_program
     );
     assert_eq!(
-        reparsed.ladder_program(1).unwrap().unwrap().data,
-        doc.ladder_program(1).unwrap().unwrap().data
+        reparsed.program().ladder_program(1).unwrap().unwrap().data,
+        doc.program().ladder_program(1).unwrap().unwrap().data
     );
 }
 
 #[test]
 fn network_cnet_and_fenet_adapters_preserve_other_payloads() {
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
-    let original_program = doc.ladder_program(0).unwrap().unwrap().data;
+    let original_program = doc.program().ladder_program(0).unwrap().unwrap().data;
     apply_operation(
         &mut doc,
         "insert_module",
@@ -278,7 +337,7 @@ fn network_cnet_and_fenet_adapters_preserve_other_payloads() {
         "base":0,"slot":0,"field":"ipAddress","expected_value":"192.168.0.100","replacement":"10.20.30.40"
     }})).unwrap();
     assert_eq!(
-        doc.fenet_config_infos()[0]
+        doc.network().fenet_config_infos()[0]
             .ip_address
             .as_ref()
             .unwrap()
@@ -292,18 +351,21 @@ fn network_cnet_and_fenet_adapters_preserve_other_payloads() {
     )
     .unwrap();
     assert_eq!(
-        doc.ladder_program(0).unwrap().unwrap().data,
+        doc.program().ladder_program(0).unwrap().unwrap().data,
         original_program
     );
     doc.to_verified_bytes().unwrap();
     let mut cnet = fixture("networks/cnetbase-native.xgwx");
-    let original_program = cnet.ladder_program(0).unwrap().unwrap().data;
+    let original_program = cnet.program().ladder_program(0).unwrap().unwrap().data;
     apply_operation(&mut cnet, "edit_cnet_settings", json!({"patch":{
         "base":0,"slot":2,"changes":[{"port_index":0,"field":"stationNo","expected_value":"0","replacement":"1"}]
     }})).unwrap();
-    assert_eq!(cnet.cnet_config_infos()[0].ports[0].station_no, Some(1));
     assert_eq!(
-        cnet.ladder_program(0).unwrap().unwrap().data,
+        cnet.network().cnet_config_infos()[0].ports[0].station_no,
+        Some(1)
+    );
+    assert_eq!(
+        cnet.program().ladder_program(0).unwrap().unwrap().data,
         original_program
     );
     cnet.to_verified_bytes().unwrap();
@@ -320,6 +382,7 @@ fn iec_symbols_ladder_and_compatibility_aliases_roundtrip() {
     );
     let mut doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
     let last_row = doc
+        .program()
         .ladder_program(0)
         .unwrap()
         .unwrap()
@@ -346,19 +409,19 @@ fn iec_symbols_ladder_and_compatibility_aliases_roundtrip() {
     let output = apply_operation(&mut doc, "insert_iec_ld_parallel_contact", json!({"program_index":0,"row_index":last_row,"expected_contact_variable":"AgentContact","expected_coil_variable":"AgentOutput","parallel_variable":"AgentContact"})).unwrap();
     assert_eq!(output["adapter"], "insert_iec_ld_parallel_contact_kind");
     let reparsed = XgwxDocument::parse(&doc.to_verified_bytes().unwrap()).unwrap();
-    let locals = reparsed.iec_local_symbols().remove(0).unwrap();
+    let locals = reparsed.variable().iec_local_symbols().remove(0).unwrap();
     assert!(locals.iter().any(|symbol| symbol.name == "AgentContact"));
     assert!(locals.iter().any(|symbol| symbol.name == "AgentOutput"));
     assert_eq!(
-        reparsed.ladder_program(0).unwrap().unwrap().data,
-        doc.ladder_program(0).unwrap().unwrap().data
+        reparsed.program().ladder_program(0).unwrap().unwrap().data,
+        doc.program().ladder_program(0).unwrap().unwrap().data
     );
 }
 
 #[test]
 fn sfc_patch_snapshots_use_exact_inspection_shapes_and_roundtrip() {
     let mut doc = fixture("sfc/native-loop.xgwx");
-    let locals = doc.sfc_variables(0).unwrap();
+    let locals = doc.variable().sfc_variables(0).unwrap();
     apply_operation(
         &mut doc,
         "edit_sfc_entity",
@@ -369,8 +432,8 @@ fn sfc_patch_snapshots_use_exact_inspection_shapes_and_roundtrip() {
         }}),
     )
     .unwrap();
-    assert_eq!(doc.sfc_variables(0).unwrap(), locals);
-    let chart = doc.sfc_programs().remove(0).blocks.remove(0);
+    assert_eq!(doc.variable().sfc_variables(0).unwrap(), locals);
+    let chart = doc.program().sfc_programs().remove(0).blocks.remove(0);
     let rows: Vec<SfcRow> = chart
         .editable_rows
         .unwrap()
@@ -382,6 +445,7 @@ fn sfc_patch_snapshots_use_exact_inspection_shapes_and_roundtrip() {
         "program_index":0,"block_index":0,"expected_entities":entities,"expected_rows":rows,"rows":rows
     }})).unwrap();
     let variables: Vec<SfcVariable> = doc
+        .variable()
         .sfc_variables(0)
         .unwrap()
         .into_iter()
@@ -393,13 +457,14 @@ fn sfc_patch_snapshots_use_exact_inspection_shapes_and_roundtrip() {
     let reparsed = XgwxDocument::parse(&doc.to_verified_bytes().unwrap()).unwrap();
     assert!(
         reparsed
+            .variable()
             .sfc_variables(0)
             .unwrap()
             .iter()
             .any(|variable| variable.name == "AgentFlag")
     );
     assert_eq!(
-        reparsed.sfc_programs()[0].blocks[0].entities[3].properties["EntityStep"]["Comment"],
+        reparsed.program().sfc_programs()[0].blocks[0].entities[3].properties["EntityStep"]["Comment"],
         "Agent chart"
     );
 }

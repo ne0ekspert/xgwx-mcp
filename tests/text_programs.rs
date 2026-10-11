@@ -1,6 +1,9 @@
 use serde_json::{Value, json};
 use std::fs;
 use xgwx::XgwxDocument;
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use xgwx_mcp::library_compat::DocumentNamespacesCompat;
+use xgwx_mcp::library_compat::module_summaries;
 use xgwx_mcp::{
     inspection,
     operations::apply_operation,
@@ -10,7 +13,7 @@ use xgwx_mcp::{
 };
 
 fn source_op(doc: &XgwxDocument, source: &str) -> EditOperation {
-    let text = doc.text_programs().remove(0);
+    let text = doc.program().text_programs().remove(0);
     EditOperation {
         name: "edit_text_program".into(),
         args: json!({"patch": {
@@ -79,12 +82,15 @@ fn source_transactions_preserve_payloads_and_expected_checks() {
         );
         let bytes = fs::read(dir.path().join("text.xgwx")).unwrap();
         let after = XgwxDocument::parse(&bytes).unwrap();
-        assert_eq!(after.text_programs()[0].source.as_deref(), Some(source));
         assert_eq!(
-            after.text_programs()[0].variables,
-            doc.text_programs()[0].variables
+            after.program().text_programs()[0].source.as_deref(),
+            Some(source)
         );
-        assert_eq!(after.modules(), doc.modules());
+        assert_eq!(
+            after.program().text_programs()[0].variables,
+            doc.program().text_programs()[0].variables
+        );
+        assert_eq!(module_summaries(&after), module_summaries(&doc));
         assert_eq!(after.header.signature, doc.header.signature);
         assert_eq!(after.header.label, doc.header.label);
         // Main-member alignment padding can change; native trailer payload stays exact.
@@ -99,7 +105,7 @@ fn source_transactions_preserve_payloads_and_expected_checks() {
                 .skip_while(|b| **b == 0)
                 .collect::<Vec<_>>()
         );
-        assert_eq!(after.programs(), doc.programs());
+        assert_eq!(after.program().programs(), doc.program().programs());
         // Only the CodeList element may change in the document XML.
         let without_source = |xml: &str| {
             let tree = roxmltree::Document::parse(xml).unwrap();
@@ -152,7 +158,7 @@ fn source_ir_preserves_line_endings_identity_and_readonly_layouts() {
         let ops = projection.lower_patch(&patch).unwrap();
         apply_operation(&mut doc, &ops[0].name, ops[0].args.clone()).unwrap();
         assert_eq!(
-            doc.text_programs()[0].source.as_deref(),
+            doc.program().text_programs()[0].source.as_deref(),
             Some("line one\r\nedited\nlast")
         );
         assert!(
@@ -172,7 +178,7 @@ fn source_ir_preserves_line_endings_identity_and_readonly_layouts() {
             .unwrap(),
         )
         .unwrap();
-        assert!(!unsupported.text_programs()[0].editable);
+        assert!(!unsupported.program().text_programs()[0].editable);
         let readonly = Projection::export(&unsupported, "revision", 0).unwrap();
         assert!(
             readonly
@@ -268,19 +274,19 @@ async fn stdio_st_and_il_creation_inspection_declarations_and_patch() {
         assert_ne!(saved.is_error, Some(true));
         let after = XgwxDocument::from_path(dir.path().join(&path)).unwrap();
         assert!(
-            after.text_programs()[0]
+            after.program().text_programs()[0]
                 .source
                 .as_ref()
                 .unwrap()
                 .contains("FALSE")
         );
         assert!(
-            after.text_programs()[0]
+            after.program().text_programs()[0]
                 .variables
                 .iter()
                 .any(|v| v.name == "Run")
         );
-        let text = after.text_programs().remove(0);
+        let text = after.program().text_programs().remove(0);
         let remove = json!({"path":path,"expected_revision":saved.structured_content.unwrap()["revision_after"],"operations":[{"name":"edit_text_variable","args":{"expected_object_id":text.object_id,"patch":{"program_index":0,"expected_variables":text.variables.iter().cloned().map(xgwx_mcp::operation_types::SfcVariable::from).collect::<Vec<_>>(),"name":"Run","data_type":"BOOL","description":"","remove":true}}}]});
         let rejected = client.call_tool(call("apply_edits", remove)).await.unwrap();
         assert_eq!(rejected.is_error, Some(true)); // referenced declarations stay protected
@@ -316,21 +322,24 @@ fn vendor_il_updates_native_ladder_and_rejects_iec_or_branch_source() {
     let exported = inspection::inspect(&doc, "vendor_il", Some(0), 0, 100).unwrap();
     assert_eq!(exported["items"][0]["editable"], true);
     let initial = doc.clone();
-    let text = doc.vendor_il_programs().remove(0);
+    let text = doc.program().vendor_il_programs().remove(0);
     let op = EditOperation {
         name: "edit_vendor_il".into(),
         args: json!({"patch":{"program_index":0,"expected_object_id":text.object_id,"expected_source":text.source.unwrap(),"source":"LOAD M00000\nAND NOT M00001\nOUT M00002\nLOADP M00003\nMOV 1 D100"}}),
     };
     apply_operation(&mut doc, &op.name, op.args.clone()).unwrap();
     let doc = XgwxDocument::parse(&doc.to_verified_bytes().unwrap()).unwrap();
-    assert_eq!(doc.programs()[0].kind, Some(0));
+    assert_eq!(doc.program().programs()[0].kind, Some(0));
     assert_eq!(
-        doc.vendor_il_programs()[0].source.as_deref(),
+        doc.program().vendor_il_programs()[0].source.as_deref(),
         op.args["patch"]["source"].as_str()
     );
-    assert_eq!(doc.variables().unwrap(), initial.variables().unwrap());
-    assert_eq!(doc.modules(), initial.modules());
-    assert_eq!(doc.programs(), initial.programs());
+    assert_eq!(
+        doc.variable().variables().unwrap(),
+        initial.variable().variables().unwrap()
+    );
+    assert_eq!(module_summaries(&doc), module_summaries(&initial));
+    assert_eq!(doc.program().programs(), initial.program().programs());
     for source in [
         "LD TRUE\nST %MX0",
         "LOAD M00000\nOR M00001\nOUT M00002",
@@ -338,7 +347,7 @@ fn vendor_il_updates_native_ladder_and_rejects_iec_or_branch_source() {
     ] {
         let mut candidate = doc.clone();
         let mut args = op.args.clone();
-        args["patch"]["expected_source"] = json!(doc.vendor_il_programs()[0].source);
+        args["patch"]["expected_source"] = json!(doc.program().vendor_il_programs()[0].source);
         args["patch"]["source"] = json!(source);
         assert!(apply_operation(&mut candidate, "edit_vendor_il", args).is_err());
         assert_eq!(candidate, doc);

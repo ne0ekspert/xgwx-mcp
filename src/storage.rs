@@ -1,3 +1,5 @@
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use crate::library_compat::DocumentNamespacesCompat;
 use fs2::FileExt;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -222,14 +224,20 @@ impl FileStore {
                     "program name must be nonblank and contain no control characters",
                 ));
             }
-            doc.update_program(
+            #[cfg(feature = "libxgwx-namespaced-api")]
+            let renamed = doc
+                .program_mut()
+                .get(0)
+                .and_then(|mut program| program.rename(name));
+            #[cfg(not(feature = "libxgwx-namespaced-api"))]
+            let renamed = doc.program_mut().update_program(
                 0,
                 &xgwx::ProgramPatch {
                     name: Some(name.clone()),
                     ..Default::default()
                 },
-            )
-            .map_err(|e| StoreError::new("invalid_program_name", e))?;
+            );
+            renamed.map_err(|e| StoreError::new("invalid_program_name", e))?;
         }
         let mut results = vec![];
         for (index, operation) in operations.iter().enumerate() {
@@ -263,7 +271,7 @@ impl FileStore {
             create_new_file(&path, &output)?;
         }
         Ok(
-            json!({"path":path,"created":!dry_run,"dry_run":dry_run,"revision_before":null,"revision_after":revision(&output),"backup_path":null,"template":template.metadata()?,"cpu_model":crate::templates::cpu_model(&doc),"project_name":doc.project_name(),"program_name":doc.programs().first().and_then(|p| p.name.clone()),"program_language":template.language(),"results":results,"validation":validation}),
+            json!({"path":path,"created":!dry_run,"dry_run":dry_run,"revision_before":null,"revision_after":revision(&output),"backup_path":null,"template":template.metadata()?,"cpu_model":crate::templates::cpu_model(&doc),"project_name":doc.project_name(),"program_name":doc.program().programs().first().and_then(|p| p.name.clone()),"program_language":template.language(),"results":results,"validation":validation}),
         )
     }
 

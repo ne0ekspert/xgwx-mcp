@@ -1,4 +1,7 @@
 //! Revision-scoped property documents, lowered only through existing writers.
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use crate::library_compat::DocumentNamespacesCompat;
+use crate::library_compat::module_summaries;
 use crate::storage::{EditOperation, StoreError};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -62,7 +65,7 @@ impl Projection {
         section: &str,
         program_index: Option<usize>,
     ) -> Result<Self, StoreError> {
-        if program_index.is_some_and(|i| i >= doc.programs().len()) {
+        if program_index.is_some_and(|i| i >= doc.program().programs().len()) {
             return Err(invalid("program_index is absent"));
         }
         if section != "variables" && program_index.is_some() {
@@ -81,7 +84,7 @@ impl Projection {
         ));
         match section {
             "modules" => {
-                for (i, m) in doc.modules().iter().enumerate() {
+                for (i, m) in module_summaries(doc).iter().enumerate() {
                     p.line(format!(
                         "module @m{i} base {} slot {} {{",
                         literal(&json!(m.base)),
@@ -121,7 +124,7 @@ impl Projection {
                 }
             }
             "variables" => {
-                match doc.variables() {
+                match doc.variable().variables() {
                     Ok(vars) => {
                         for (i, v) in vars.iter().enumerate() {
                             p.line(format!("variable @global.v{i} {{"));
@@ -150,6 +153,7 @@ impl Projection {
                     Err(e) => p.field("global_status", json!(e.to_string()), None),
                 }
                 for (program, vars) in doc
+                    .variable()
                     .iec_local_symbols()
                     .into_iter()
                     .enumerate()
@@ -240,7 +244,7 @@ impl Projection {
                         p.line("}");
                     }
                 }
-                for (i, f) in doc.fenet_config_infos().iter().enumerate() {
+                for (i, f) in doc.network().fenet_config_infos().iter().enumerate() {
                     p.line(format!(
                         "fenet @f{i} base {} slot {} {{",
                         literal(&json!(f.base)),
@@ -279,7 +283,7 @@ impl Projection {
                     }
                     p.line("}");
                 }
-                for (i, c) in doc.cnet_config_infos().iter().enumerate() {
+                for (i, c) in doc.network().cnet_config_infos().iter().enumerate() {
                     for (port, v) in c.ports.iter().enumerate() {
                         p.line(format!(
                             "cnet_port @c{i}.p{port} base {} slot {} {{",

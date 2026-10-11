@@ -1,4 +1,6 @@
 //! Guarded SFC projection; snapshots come from the fresh source, never the client.
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use crate::library_compat::DocumentNamespacesCompat;
 use crate::{
     operation_types::{SfcEntity, SfcEntityPatch, SfcRow, SfcVariable},
     storage::{EditOperation, StoreError},
@@ -59,6 +61,7 @@ impl Projection {
         program: SfcProgram,
     ) -> Result<Self, StoreError> {
         let summary = doc
+            .program()
             .programs()
             .into_iter()
             .nth(index)

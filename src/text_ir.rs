@@ -1,5 +1,7 @@
 //! Revision-scoped, positional ladder projection. The original document remains
 //! the source of truth; this IR is lowered only through public guarded writers.
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use crate::library_compat::DocumentNamespacesCompat;
 use crate::storage::{EditOperation, StoreError};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -178,11 +180,13 @@ pub struct Projection {
 impl Projection {
     pub fn export(doc: &XgwxDocument, revision: &str, index: usize) -> Result<Self, StoreError> {
         let summary = doc
+            .program()
             .programs()
             .into_iter()
             .nth(index)
             .ok_or_else(|| error("program_index is absent"))?;
         if let Some(program) = doc
+            .program()
             .text_programs()
             .into_iter()
             .find(|p| p.program_index == index)
@@ -220,6 +224,7 @@ impl Projection {
             });
         }
         if let Some(program) = doc
+            .program()
             .sfc_programs()
             .into_iter()
             .find(|p| p.program_index == index)
@@ -237,6 +242,7 @@ impl Projection {
             });
         }
         let program = doc
+            .program()
             .ladder_program(index)
             .ok_or_else(|| error("program_index is absent"))?
             .map_err(unsupported)?;
@@ -252,7 +258,7 @@ impl Projection {
         let mut sources = BTreeMap::new();
         let mut iec_rows = vec![];
         let mut isolated = BTreeSet::new();
-        let globals = doc.variables().map_err(unsupported)?;
+        let globals = doc.variable().variables().map_err(unsupported)?;
         for (i, symbol) in globals.iter().enumerate() {
             let id = format!("@s{i}");
             text.push_str(&format!(
@@ -270,6 +276,7 @@ impl Projection {
             quote(summary.object_id.as_deref().unwrap_or(""))
         ));
         let locals = doc
+            .variable()
             .iec_local_symbols()
             .into_iter()
             .nth(index)
@@ -486,7 +493,14 @@ impl Projection {
             // The text writer has a legacy raw-string fallback for undecoded layouts.
             // A structural writer on a disposable clone proves the whole payload uses
             // the same native parser before exposing complete instruction updates.
-            let instruction_probe = doc.clone().insert_ladder_row(index, 0);
+            #[cfg(feature = "libxgwx-namespaced-api")]
+            let instruction_probe = doc
+                .clone()
+                .program_mut()
+                .get(index)
+                .and_then(|mut program| program.ladder()?.insert_row(0));
+            #[cfg(not(feature = "libxgwx-namespaced-api"))]
+            let instruction_probe = doc.clone().program_mut().insert_ladder_row(index, 0);
             let instruction_layout = instruction_probe.is_ok();
             if let Err(reason) = instruction_probe {
                 text.push_str(&format!(

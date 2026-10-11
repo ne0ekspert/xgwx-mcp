@@ -1,4 +1,5 @@
 pub mod inspection;
+pub mod library_compat;
 pub mod operation_types;
 pub mod operations;
 pub mod server;

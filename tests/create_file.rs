@@ -5,6 +5,8 @@ use std::{
     thread,
 };
 use xgwx::XgwxDocument;
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use xgwx_mcp::library_compat::DocumentNamespacesCompat;
 use xgwx_mcp::{
     storage::{EditOperation, FileStore, revision},
     templates::{self, ProjectTemplate},
@@ -136,9 +138,14 @@ fn create_cpu_and_initial_edits_are_verified_and_failures_create_nothing() {
     assert_eq!(saved["cpu_model"], "XGK-CPUH");
     assert_eq!(saved["results"].as_array().unwrap().len(), 2);
     let doc = XgwxDocument::from_path(dir.path().join("ready.xgwx")).unwrap();
-    assert_eq!(doc.programs()[0].name.as_deref(), Some("Main"));
+    assert_eq!(doc.program().programs()[0].name.as_deref(), Some("Main"));
     assert!(
-        doc.ladder_program(0).unwrap().unwrap().structure.rungs[0]
+        doc.program()
+            .ladder_program(0)
+            .unwrap()
+            .unwrap()
+            .structure
+            .rungs[0]
             .cells
             .iter()
             .any(|c| c.value == "MOV")
@@ -318,8 +325,8 @@ fn native_style_choices_name_path_cpu_and_language_resolve_verified_projects() {
     assert_eq!(preview["revision_after"], saved["revision_after"]);
     let doc = XgwxDocument::from_path(dir.path().join("named.xgwx")).unwrap();
     assert_eq!(doc.project_name(), Some("공장 & <Line 1>"));
-    assert_eq!(doc.programs()[0].name.as_deref(), Some("Main"));
-    assert_eq!(doc.sfc_programs().len(), 1);
+    assert_eq!(doc.program().programs()[0].name.as_deref(), Some("Main"));
+    assert_eq!(doc.program().sfc_programs().len(), 1);
     let count = fs::read_dir(dir.path()).unwrap().count();
     options.path = "invalid.xgwx".into();
     options.cpu_model = Some("XGK-CPUH".into());

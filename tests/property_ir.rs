@@ -1,3 +1,6 @@
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use xgwx_mcp::library_compat::DocumentNamespacesCompat;
+use xgwx_mcp::library_compat::module_summaries;
 #[path = "../src/test_support.rs"]
 mod test_support;
 use serde_json::json;
@@ -51,8 +54,8 @@ fn module_properties_preserve_program_and_symbols_and_enforce_catalog_values() {
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
     doc.insert_module(0, 0, "XGI-D24A/B").unwrap();
     doc.insert_module(0, 1, "XGQ-RY2A/B").unwrap();
-    let program = doc.ladder_program(0).unwrap().unwrap().data;
-    let vars = doc.variables().unwrap();
+    let program = doc.program().ladder_program(0).unwrap().unwrap().data;
+    let vars = doc.variable().variables().unwrap();
     apply(
         &mut doc,
         "modules",
@@ -65,10 +68,16 @@ fn module_properties_preserve_program_and_symbols_and_enforce_catalog_values() {
             ("  edit comment = \"\"", "  edit comment = \"Tank inputs\""),
         ],
     );
-    assert_eq!(doc.modules()[0].comment.as_deref(), Some("Tank inputs"));
+    assert_eq!(
+        module_summaries(&doc)[0].comment.as_deref(),
+        Some("Tank inputs")
+    );
     assert_eq!(doc.module_option_values(0, 0).unwrap()[0].value, 3);
-    assert_eq!(doc.ladder_program(0).unwrap().unwrap().data, program);
-    assert_eq!(doc.variables().unwrap(), vars);
+    assert_eq!(
+        doc.program().ladder_program(0).unwrap().unwrap().data,
+        program
+    );
+    assert_eq!(doc.variable().variables().unwrap(), vars);
     let ir = Projection::export(&doc, "revision", "modules", None).unwrap();
     let ops = ir
         .lower_patch(&patch(
@@ -89,9 +98,9 @@ fn module_properties_preserve_program_and_symbols_and_enforce_catalog_values() {
 fn global_metadata_changes_coalesce_into_one_writer_and_preserve_program() {
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
     doc.insert_module(0, 0, "XGI-D21A").unwrap();
-    doc.generate_io_variables().unwrap();
+    doc.variable_mut().generate_io_variables().unwrap();
     let ir = Projection::export(&doc, "revision", "variables", None).unwrap();
-    let vars = doc.variables().unwrap();
+    let vars = doc.variable().variables().unwrap();
     let old_name = format!("  edit name = {}", json!(vars[0].name));
     let old_desc = format!("  edit description = {}", json!(vars[0].description));
     let diff = patch(
@@ -103,17 +112,22 @@ fn global_metadata_changes_coalesce_into_one_writer_and_preserve_program() {
     );
     let ops = ir.lower_patch(&diff).unwrap();
     assert_eq!(ops.len(), 1);
-    let program = doc.ladder_program(0).unwrap().unwrap().data;
+    let program = doc.program().ladder_program(0).unwrap().unwrap().data;
     xgwx_mcp::operations::apply_operation(&mut doc, &ops[0].name, ops[0].args.clone()).unwrap();
     assert_eq!(
-        doc.variables().unwrap()[0].name.as_deref(),
+        doc.variable().variables().unwrap()[0].name.as_deref(),
         Some("StartButton")
     );
     assert_eq!(
-        doc.variables().unwrap()[0].description.as_deref(),
+        doc.variable().variables().unwrap()[0]
+            .description
+            .as_deref(),
         Some("Start switch")
     );
-    assert_eq!(doc.ladder_program(0).unwrap().unwrap().data, program);
+    assert_eq!(
+        doc.program().ladder_program(0).unwrap().unwrap().data,
+        program
+    );
     doc.to_verified_bytes().unwrap();
 }
 #[test]
@@ -126,7 +140,8 @@ fn local_descriptions_and_single_rename_are_guarded_and_reexported() {
         "<Symbols Count=\"0\"> </Symbols>",
     );
     let mut doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
-    doc.insert_iec_local_symbol(0, "AgentContact", "BOOL", "Input")
+    doc.variable_mut()
+        .insert_iec_local_symbol(0, "AgentContact", "BOOL", "Input")
         .unwrap();
     apply(
         &mut doc,
@@ -149,7 +164,7 @@ fn local_descriptions_and_single_rename_are_guarded_and_reexported() {
     assert!(ir.lower_patch(&patch(&ir.text, &[name, desc])).is_err());
     apply(&mut doc, "variables", Some(0), &[name]);
     assert!(
-        doc.iec_local_symbols()[0]
+        doc.variable().iec_local_symbols()[0]
             .as_ref()
             .unwrap()
             .iter()
@@ -162,7 +177,7 @@ fn local_descriptions_and_single_rename_are_guarded_and_reexported() {
         &[("  edit data_type = \"BOOL\"", "  edit data_type = \"WORD\"")],
     );
     assert_eq!(
-        doc.iec_local_symbols()[0].as_ref().unwrap()[0]
+        doc.variable().iec_local_symbols()[0].as_ref().unwrap()[0]
             .data_type
             .as_deref(),
         Some("WORD")
@@ -172,7 +187,7 @@ fn local_descriptions_and_single_rename_are_guarded_and_reexported() {
 fn network_metadata_fenet_and_grouped_cnet_settings_preserve_other_payloads() {
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
     doc.insert_module(0, 0, "XGL-EFMT(B)").unwrap();
-    let program = doc.ladder_program(0).unwrap().unwrap().data;
+    let program = doc.program().ladder_program(0).unwrap().unwrap().data;
     apply(
         &mut doc,
         "networks",
@@ -186,14 +201,14 @@ fn network_metadata_fenet_and_grouped_cnet_settings_preserve_other_payloads() {
         ],
     );
     assert_eq!(
-        doc.fenet_config_infos()[0]
+        doc.network().fenet_config_infos()[0]
             .ip_address
             .as_ref()
             .unwrap()
             .address,
         "10.20.30.40"
     );
-    assert_eq!(doc.fenet_config_infos()[0].dhcp, Some(1));
+    assert_eq!(doc.network().fenet_config_infos()[0].dhcp, Some(1));
     let ir = Projection::export(&doc, "revision", "networks", None).unwrap();
     let old = format!("  edit name = {}", json!(doc.networks()[0].name));
     apply(
@@ -204,7 +219,10 @@ fn network_metadata_fenet_and_grouped_cnet_settings_preserve_other_payloads() {
     );
     assert_eq!(doc.networks()[0].name.as_deref(), Some("Plant network"));
     assert!(ir.text.contains("network_module"));
-    assert_eq!(doc.ladder_program(0).unwrap().unwrap().data, program);
+    assert_eq!(
+        doc.program().ladder_program(0).unwrap().unwrap().data,
+        program
+    );
     let mut c = fixture("networks/cnetbase-native.xgwx");
     let ir = Projection::export(&c, "revision", "networks", None).unwrap();
     let start = ir
@@ -228,7 +246,10 @@ fn network_metadata_fenet_and_grouped_cnet_settings_preserve_other_payloads() {
     assert_eq!(ops.len(), 1);
     assert_eq!(ops[0].args["patch"]["changes"].as_array().unwrap().len(), 2);
     xgwx_mcp::operations::apply_operation(&mut c, &ops[0].name, ops[0].args.clone()).unwrap();
-    assert_eq!(c.cnet_config_infos()[0].ports[0].station_no, Some(1));
+    assert_eq!(
+        c.network().cnet_config_infos()[0].ports[0].station_no,
+        Some(1)
+    );
     c.to_verified_bytes().unwrap();
 }
 #[test]

@@ -1,3 +1,5 @@
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use xgwx_mcp::library_compat::DocumentNamespacesCompat;
 #[path = "../src/test_support.rs"]
 mod test_support;
 use std::fs;
@@ -29,6 +31,7 @@ fn export_fixture_inventory() {
     ] {
         let doc = fixture(name);
         let index = doc
+            .program()
             .ladder_programs()
             .iter()
             .position(|p| p.is_ok())
@@ -212,7 +215,7 @@ fn apply(doc: &mut XgwxDocument, name: &str, args: serde_json::Value) {
 fn native_rung_output_comments_multiline_creation_deletion_and_preservation() {
     use serde_json::json;
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
-    let untouched = doc.ladder_program(0).unwrap().unwrap().data;
+    let untouched = doc.program().ladder_program(0).unwrap().unwrap().data;
     apply(
         &mut doc,
         "create_program",
@@ -257,7 +260,7 @@ fn native_rung_output_comments_multiline_creation_deletion_and_preservation() {
         .unwrap();
     let (_, rev, doc) = store.read("p.xgwx").unwrap();
     let ir = Projection::export(&doc, &rev, 1).unwrap();
-    let comments = doc.ladder_program(1).unwrap().unwrap().structure;
+    let comments = doc.program().ladder_program(1).unwrap().unwrap().structure;
     assert_eq!(
         comments.rung_comments[0].text,
         "설명\nSecond line with \"quotes\""
@@ -266,7 +269,10 @@ fn native_rung_output_comments_multiline_creation_deletion_and_preservation() {
         comments.output_comments[0].text,
         "Output documentation grows"
     );
-    assert_eq!(doc.ladder_program(0).unwrap().unwrap().data, untouched);
+    assert_eq!(
+        doc.program().ladder_program(0).unwrap().unwrap().data,
+        untouched
+    );
     let rung_line = ir.text.lines().find(|l| l.contains(" RUNG ")).unwrap();
     let edited = ir
         .text
@@ -279,7 +285,8 @@ fn native_rung_output_comments_multiline_creation_deletion_and_preservation() {
         .unwrap();
     let (_, rev, doc) = store.read("p.xgwx").unwrap();
     assert!(
-        doc.ladder_program(1)
+        doc.program()
+            .ladder_program(1)
             .unwrap()
             .unwrap()
             .structure
@@ -301,7 +308,8 @@ fn native_rung_output_comments_multiline_creation_deletion_and_preservation() {
         .unwrap();
     let (_, _, doc) = store.read("p.xgwx").unwrap();
     assert_eq!(
-        doc.ladder_program(1)
+        doc.program()
+            .ladder_program(1)
             .unwrap()
             .unwrap()
             .structure
@@ -309,7 +317,10 @@ fn native_rung_output_comments_multiline_creation_deletion_and_preservation() {
             .text,
         "Created through patch"
     );
-    assert_eq!(doc.ladder_program(0).unwrap().unwrap().data, untouched);
+    assert_eq!(
+        doc.program().ladder_program(0).unwrap().unwrap().data,
+        untouched
+    );
 }
 #[test]
 fn symbol_description_changes_and_writer_failure_rollback() {
@@ -353,12 +364,14 @@ fn symbol_description_changes_and_writer_failure_rollback() {
         .unwrap();
     let (_, _, changed) = store.read("p.xgwx").unwrap();
     assert_eq!(
-        changed.variables().unwrap()[0].description.as_deref(),
+        changed.variable().variables().unwrap()[0]
+            .description
+            .as_deref(),
         Some("Shared output description")
     );
     assert_eq!(
-        changed.ladder_program(0).unwrap().unwrap().data,
-        doc.ladder_program(0).unwrap().unwrap().data
+        changed.program().ladder_program(0).unwrap().unwrap().data,
+        doc.program().ladder_program(0).unwrap().unwrap().data
     );
 }
 #[test]
@@ -383,6 +396,7 @@ fn iec_multiple_resizing_operands_kinds_and_local_descriptions() {
         );
     }
     let last = doc
+        .program()
         .ladder_program(0)
         .unwrap()
         .unwrap()
@@ -446,7 +460,7 @@ fn iec_multiple_resizing_operands_kinds_and_local_descriptions() {
         |l| l.trim_start().starts_with("coil ") && l.ends_with(" SET \"OutputWithLongerName\"")
     ));
     assert!(
-        doc.iec_local_symbols()[0]
+        doc.variable().iec_local_symbols()[0]
             .as_ref()
             .unwrap()
             .iter()
@@ -535,10 +549,18 @@ fn native_output_annotation_creation_is_separate_from_symbol_description() {
         .apply_patch("p.xgwx", &rev, 0, &full_patch(&ir.text, &edited), false)
         .unwrap();
     let (_, rev, changed) = store.read("p.xgwx").unwrap();
-    let structure = changed.ladder_program(0).unwrap().unwrap().structure;
+    let structure = changed
+        .program()
+        .ladder_program(0)
+        .unwrap()
+        .unwrap()
+        .structure;
     assert_eq!(structure.output_comments[0].text, "Output annotation");
     assert!(structure.rung_comments.is_empty());
-    assert_eq!(changed.variables().unwrap(), doc.variables().unwrap());
+    assert_eq!(
+        changed.variable().variables().unwrap(),
+        doc.variable().variables().unwrap()
+    );
     let ir = Projection::export(&changed, &rev, 0).unwrap();
     let line = ir.text.lines().find(|l| l.contains(" OUTPUT ")).unwrap();
     let edited = ir
@@ -582,7 +604,7 @@ fn iec_native_comment_text_uses_the_comment_string_source_mapping() {
     use base64::Engine;
     use std::io::Write;
     let mut doc = fixture("ladder-wire-delete/iec-horizontal-native.xgwx");
-    let program = doc.ladder_program(0).unwrap().unwrap();
+    let program = doc.program().ladder_program(0).unwrap().unwrap();
     let record = program
         .iec_record_frames()
         .unwrap()
@@ -617,7 +639,7 @@ fn iec_native_comment_text_uses_the_comment_string_source_mapping() {
     );
     let doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
     assert_eq!(
-        doc.ladder_program(0).unwrap().unwrap().data[record.offset + 1],
+        doc.program().ladder_program(0).unwrap().unwrap().data[record.offset + 1],
         0x3f
     );
     let ir = Projection::export(&doc, "revision", 0).unwrap();
@@ -669,7 +691,8 @@ fn blank_xgk_program_element_creation_deletion_and_collision_rollback() {
     let (_, rev, doc) = store.read("p.xgwx").unwrap();
     let ir = Projection::export(&doc, &rev, 0).unwrap();
     assert_eq!(
-        doc.ladder_program(0)
+        doc.program()
+            .ladder_program(0)
             .unwrap()
             .unwrap()
             .structure
@@ -706,7 +729,8 @@ fn blank_xgk_program_element_creation_deletion_and_collision_rollback() {
         .unwrap();
     let (_, _, doc) = store.read("p.xgwx").unwrap();
     assert!(
-        doc.ladder_program(0)
+        doc.program()
+            .ladder_program(0)
             .unwrap()
             .unwrap()
             .structure
@@ -731,7 +755,8 @@ fn first_xgk_rung_comment_can_be_created_without_existing_elements() {
         apply(&mut doc, &op.name, op.args);
     }
     assert_eq!(
-        doc.ladder_program(0)
+        doc.program()
+            .ladder_program(0)
             .unwrap()
             .unwrap()
             .structure
@@ -850,7 +875,8 @@ fn iec_isolated_coil_creation_then_deletion_keeps_row_envelope() {
         apply(&mut doc, &op.name, op.args);
     }
     assert_eq!(
-        doc.ladder_program(0)
+        doc.program()
+            .ladder_program(0)
             .unwrap()
             .unwrap()
             .iec_row_frames()
@@ -883,7 +909,7 @@ fn xgk_output_column_maps_native_x94_for_kind_operand_edits() {
     for op in ops {
         apply(&mut doc, &op.name, op.args);
     }
-    let program = doc.ladder_program(0).unwrap().unwrap();
+    let program = doc.program().ladder_program(0).unwrap().unwrap();
     let cell = program
         .structure
         .rungs
@@ -963,7 +989,7 @@ fn connected_iec_terminal_coil_deletion_preserves_contact_and_symbols() {
         "insert_iec_ld_single_element",
         json!({"program_index":0,"row_index":0,"raw_x":94,"category":"coil","kind":"SET","operand":"%MX1"}),
     );
-    let vars = doc.variables().unwrap();
+    let vars = doc.variable().variables().unwrap();
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     let coil = ir
         .text
@@ -989,7 +1015,7 @@ fn connected_iec_terminal_coil_deletion_preserves_contact_and_symbols() {
             .lines()
             .any(|l| l.trim_start().starts_with("coil "))
     );
-    assert_eq!(vars, doc.variables().unwrap());
+    assert_eq!(vars, doc.variable().variables().unwrap());
     doc.to_verified_bytes().unwrap();
 }
 #[test]
@@ -1005,7 +1031,13 @@ fn xgk_physical_wire_deletion_and_vertical_branch_creation_preserve_elements() {
             );
         }
     }
-    let elements = doc.ladder_program(0).unwrap().unwrap().structure.rungs;
+    let elements = doc
+        .program()
+        .ladder_program(0)
+        .unwrap()
+        .unwrap()
+        .structure
+        .rungs;
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     let header = ir.text.lines().find(|l| l.starts_with("program ")).unwrap();
     let edited = ir.text.replace(
@@ -1027,7 +1059,14 @@ fn xgk_physical_wire_deletion_and_vertical_branch_creation_preserve_elements() {
             .collect::<Vec<_>>()
     };
     assert_eq!(
-        values(&doc.ladder_program(0).unwrap().unwrap().structure.rungs),
+        values(
+            &doc.program()
+                .ladder_program(0)
+                .unwrap()
+                .unwrap()
+                .structure
+                .rungs
+        ),
         values(&elements)
     );
     let ir = Projection::export(&doc, "next", 0).unwrap();
@@ -1043,7 +1082,8 @@ fn xgk_physical_wire_deletion_and_vertical_branch_creation_preserve_elements() {
         apply(&mut doc, &op.name, op.args);
     }
     assert!(
-        doc.ladder_program(0)
+        doc.program()
+            .ladder_program(0)
             .unwrap()
             .unwrap()
             .structure
@@ -1064,7 +1104,7 @@ fn xgk_physical_wire_deletion_and_vertical_branch_creation_preserve_elements() {
         apply(&mut doc, &op.name, op.args);
     }
     // Binary offsets move; compare retained native positions/kinds/operands.
-    let after = doc.ladder_program(0).unwrap().unwrap();
+    let after = doc.program().ladder_program(0).unwrap().unwrap();
     let values = |rows: &Vec<xgwx::LadderRung>| {
         rows.iter()
             .flat_map(|r| {
@@ -1117,8 +1157,9 @@ fn iec_horizontal_wire_deletion_matches_native_capture_and_retains_records() {
         apply(&mut doc, &op.name, op.args);
     }
     assert_eq!(
-        doc.ladder_program(0).unwrap().unwrap().data,
+        doc.program().ladder_program(0).unwrap().unwrap().data,
         fixture("ladder-wire-delete/iec-horizontal-native.xgwx")
+            .program()
             .ladder_program(0)
             .unwrap()
             .unwrap()
@@ -1177,7 +1218,7 @@ fn iec_vertical_wire_removal_and_recreation_preserve_elements() {
         "insert_iec_ld_parallel_contact_kind",
         json!({"program_index":0,"row_index":0,"expected_contact_variable":"%MX0","expected_coil_variable":"%MX1","parallel_kind":"NC","parallel_variable":"%MX2"}),
     );
-    let before = doc.ladder_program(0).unwrap().unwrap();
+    let before = doc.program().ladder_program(0).unwrap().unwrap();
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     let wire = ir
         .text
@@ -1212,7 +1253,7 @@ fn iec_vertical_wire_removal_and_recreation_preserve_elements() {
     for op in ops {
         apply(&mut doc, &op.name, op.args);
     }
-    let after = doc.ladder_program(0).unwrap().unwrap();
+    let after = doc.program().ladder_program(0).unwrap().unwrap();
     assert_eq!(before.data, after.data);
     doc.to_verified_bytes().unwrap();
 }
@@ -1262,16 +1303,18 @@ fn vertical_wire_expected_absence_failure_retains_source_without_backup() {
 #[test]
 fn iec_function_names_and_multiple_resizing_arguments_preserve_bindings() {
     let mut doc = fixture("function-output-wires/base.xgwx");
-    let program = doc.ladder_program(0).unwrap().unwrap();
+    let program = doc.program().ladder_program(0).unwrap().unwrap();
     let functions = program.iec_function_blocks().unwrap();
     let links = program.iec_function_operand_links().unwrap();
-    let symbols = doc.variables().unwrap();
+    let symbols = doc.variable().variables().unwrap();
     let locals = doc
+        .variable()
         .iec_local_symbols()
         .into_iter()
         .map(Result::unwrap)
         .collect::<Vec<_>>();
     let others = doc
+        .program()
         .ladder_programs()
         .into_iter()
         .skip(1)
@@ -1331,7 +1374,7 @@ fn iec_function_names_and_multiple_resizing_arguments_preserve_bindings() {
         apply(&mut doc, &op.name, op.args);
     }
     let output_ir = Projection::export(&doc, "outputs", 0).unwrap();
-    let current = doc.ladder_program(0).unwrap().unwrap();
+    let current = doc.program().ladder_program(0).unwrap().unwrap();
     let blocks = current.iec_function_blocks().unwrap();
     let current_links = current.iec_function_operand_links().unwrap();
     let mut output_text = output_ir.text.clone();
@@ -1369,7 +1412,7 @@ fn iec_function_names_and_multiple_resizing_arguments_preserve_bindings() {
     }
     assert!(next.text.contains("name \"MUL\""));
     assert!(next.text.contains("name \"GE\""));
-    let after = doc.ladder_program(0).unwrap().unwrap();
+    let after = doc.program().ladder_program(0).unwrap().unwrap();
     let bindings = |links: Vec<xgwx::IecFunctionOperandLink>| {
         links
             .into_iter()
@@ -1391,17 +1434,19 @@ fn iec_function_names_and_multiple_resizing_arguments_preserve_bindings() {
         bindings(links),
         bindings(after.iec_function_operand_links().unwrap())
     );
-    assert_eq!(symbols, doc.variables().unwrap());
+    assert_eq!(symbols, doc.variable().variables().unwrap());
     assert_eq!(
         locals,
-        doc.iec_local_symbols()
+        doc.variable()
+            .iec_local_symbols()
             .into_iter()
             .map(Result::unwrap)
             .collect::<Vec<_>>()
     );
     assert_eq!(
         others,
-        doc.ladder_programs()
+        doc.program()
+            .ladder_programs()
             .into_iter()
             .skip(1)
             .map(|p| p.unwrap().data)
@@ -1507,7 +1552,7 @@ fn iec_function_metadata_deletion_rebinding_and_invalid_types_fail_atomically() 
 #[test]
 fn xgk_instruction_creation_edit_arity_change_and_deletion_use_native_writers() {
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
-    let symbols = doc.variables().unwrap();
+    let symbols = doc.variable().variables().unwrap();
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     let rung = ir
         .text
@@ -1573,7 +1618,7 @@ fn xgk_instruction_creation_edit_arity_change_and_deletion_use_native_writers() 
             .lines()
             .any(|l| l.trim_start().starts_with("instruction "))
     );
-    assert_eq!(symbols, doc.variables().unwrap());
+    assert_eq!(symbols, doc.variable().variables().unwrap());
     doc.to_verified_bytes().unwrap();
 }
 
@@ -1628,6 +1673,7 @@ fn xgk_comparison_creation_edit_and_deletion_preserve_coil() {
         apply(&mut doc, &op.name, op.args);
     }
     let cells = doc
+        .program()
         .ladder_program(0)
         .unwrap()
         .unwrap()
@@ -1742,7 +1788,7 @@ fn xgk_unsupported_native_instruction_layout_stays_read_only() {
         "insert_ladder_instruction",
         json!({"program_index":0,"raw_y":0,"mnemonic":"MOV","operands":["1","D000000"]}),
     );
-    let program = doc.ladder_program(0).unwrap().unwrap();
+    let program = doc.program().ladder_program(0).unwrap().unwrap();
     let cell = program
         .structure
         .rungs
@@ -1773,7 +1819,7 @@ fn xgk_unsupported_native_instruction_layout_stays_read_only() {
         range,
         &base64::engine::general_purpose::STANDARD.encode(encoded),
     );
-    assert!(doc.clone().insert_ladder_row(0, 0).is_err());
+    assert!(doc.clone().program_mut().insert_ladder_row(0, 0).is_err());
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     assert!(
         !ir.text
@@ -1872,7 +1918,7 @@ fn sfc_text_export_rows_comments_conditions_and_native_snapshots() {
         assert!(ir.lower_patch("").unwrap().is_empty());
     }
     let mut doc = fixture("sfc/native-loop.xgwx");
-    let locals = doc.sfc_variables(0).unwrap();
+    let locals = doc.variable().sfc_variables(0).unwrap();
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     let edited = ir
         .text
@@ -1892,15 +1938,15 @@ fn sfc_text_export_rows_comments_conditions_and_native_snapshots() {
     let next = Projection::export(&doc, "next", 0).unwrap();
     assert!(next.text.contains("Agent note\\nWait & check <ready>"));
     assert!(next.text.contains("title \"%MX2\""));
-    assert_eq!(locals, doc.sfc_variables(0).unwrap());
+    assert_eq!(locals, doc.variable().sfc_variables(0).unwrap());
     doc.to_verified_bytes().unwrap();
 }
 
 #[test]
 fn sfc_action_and_st_source_edits_preserve_declarations_and_branch_structure() {
     let mut doc = fixture("sfc/multi-action-two-native.xgwx");
-    let locals = doc.sfc_variables(0).unwrap();
-    let original = doc.sfc_programs()[0].blocks[0]
+    let locals = doc.variable().sfc_variables(0).unwrap();
+    let original = doc.program().sfc_programs()[0].blocks[0]
         .editable_rows
         .clone()
         .unwrap();
@@ -1928,22 +1974,22 @@ fn sfc_action_and_st_source_edits_preserve_declarations_and_branch_structure() {
     for op in ir.lower_patch(&full_patch(&ir.text, &edited)).unwrap() {
         apply(&mut doc, &op.name, op.args);
     }
-    let after = doc.sfc_programs()[0].blocks[0]
+    let after = doc.program().sfc_programs()[0].blocks[0]
         .editable_rows
         .clone()
         .unwrap();
     assert_eq!(after[2].action.as_deref(), Some("%MX14"));
     assert_eq!(after[2].action_time.as_deref(), Some("T#3s"));
     assert_eq!(after[1].action_code.as_deref(), Some(replacement.as_str()));
-    assert_eq!(locals, doc.sfc_variables(0).unwrap());
+    assert_eq!(locals, doc.variable().sfc_variables(0).unwrap());
     doc.to_verified_bytes().unwrap();
 }
 
 #[test]
 fn sfc_multiple_declaration_descriptions_rebase_complete_snapshots() {
     let mut doc = fixture("sfc/declarations-roundtrip.xgwx");
-    let before = doc.sfc_programs()[0].blocks.clone();
-    let vars = doc.sfc_variables(0).unwrap();
+    let before = doc.program().sfc_programs()[0].blocks.clone();
+    let vars = doc.variable().sfc_variables(0).unwrap();
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     let mut edited = ir.text.clone();
     let mut count = 0;
@@ -1968,8 +2014,8 @@ fn sfc_multiple_declaration_descriptions_rebase_complete_snapshots() {
     for op in ops {
         apply(&mut doc, &op.name, op.args);
     }
-    assert_eq!(before, doc.sfc_programs()[0].blocks);
-    let next = doc.sfc_variables(0).unwrap();
+    assert_eq!(before, doc.program().sfc_programs()[0].blocks);
+    let next = doc.variable().sfc_variables(0).unwrap();
     for (a, b) in vars.iter().zip(&next) {
         assert_eq!(a.name, b.name);
         assert_eq!(a.data_type, b.data_type);
@@ -1991,8 +2037,12 @@ fn sfc_unsupported_chart_retains_opaque_xml_and_uses_entity_writer() {
         .xml
         .replace("<EntityGrid ", "<EntityGrid AgentOpaque=\"keep\" ");
     let mut doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
-    assert!(doc.sfc_programs()[0].blocks[0].editable_rows.is_none());
-    let locals = doc.sfc_variables(0).unwrap();
+    assert!(
+        doc.program().sfc_programs()[0].blocks[0]
+            .editable_rows
+            .is_none()
+    );
+    let locals = doc.variable().sfc_variables(0).unwrap();
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     assert!(ir.text.contains("sequence unsupported readonly"));
     let condition = ir
@@ -2019,7 +2069,7 @@ fn sfc_unsupported_chart_retains_opaque_xml_and_uses_entity_writer() {
     }
     assert!(doc.xml.contains("AgentOpaque=\"keep\""));
     assert_eq!(doc.xml.matches("Title=\"%MX2\"").count(), 2);
-    assert_eq!(locals, doc.sfc_variables(0).unwrap());
+    assert_eq!(locals, doc.variable().sfc_variables(0).unwrap());
     doc.to_verified_bytes().unwrap();
     let moved = ir
         .text
@@ -2107,11 +2157,11 @@ fn sfc_patch_rejects_structure_metadata_and_rolls_back_native_failures() {
 #[test]
 fn sfc_branch_row_fields_preserve_positions_endpoints_and_sources() {
     let mut doc = fixture("sfc/multi-action-branch-native.xgwx");
-    let before = doc.sfc_programs()[0].blocks[0]
+    let before = doc.program().sfc_programs()[0].blocks[0]
         .editable_rows
         .clone()
         .unwrap();
-    let vars = doc.sfc_variables(0).unwrap();
+    let vars = doc.variable().sfc_variables(0).unwrap();
     let index = before.iter().position(|r| r.kind == "step").unwrap();
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     let line = ir
@@ -2135,7 +2185,7 @@ fn sfc_branch_row_fields_preserve_positions_endpoints_and_sources() {
     {
         apply(&mut doc, &op.name, op.args);
     }
-    let after = doc.sfc_programs()[0].blocks[0]
+    let after = doc.program().sfc_programs()[0].blocks[0]
         .editable_rows
         .clone()
         .unwrap();
@@ -2154,14 +2204,14 @@ fn sfc_branch_row_fields_preserve_positions_endpoints_and_sources() {
             .collect::<Vec<_>>()
     };
     assert_eq!(structural(before), structural(after));
-    assert_eq!(vars, doc.sfc_variables(0).unwrap());
+    assert_eq!(vars, doc.variable().sfc_variables(0).unwrap());
     doc.to_verified_bytes().unwrap();
 }
 
 #[test]
 fn sfc_inconsistent_shared_st_source_rolls_back() {
     let doc = fixture("sfc/multi-action-three-native.xgwx");
-    let rows = doc.sfc_programs()[0].blocks[0]
+    let rows = doc.program().sfc_programs()[0].blocks[0]
         .editable_rows
         .clone()
         .unwrap();
@@ -2240,7 +2290,7 @@ fn sfc_author_row(id: &str, kind: &str, title: &str, initial: bool) -> String {
 #[test]
 fn sfc_blank_chart_creation_then_clear_preserves_declarations() {
     let mut doc = fixture("sfc/new-xgi-sfc.xgwx");
-    let locals = doc.sfc_variables(0).unwrap();
+    let locals = doc.variable().sfc_variables(0).unwrap();
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     let chart = ir
         .text
@@ -2260,7 +2310,7 @@ fn sfc_blank_chart_creation_then_clear_preserves_declarations() {
     for op in ops {
         apply(&mut doc, &op.name, op.args);
     }
-    let rows = doc.sfc_programs()[0].blocks[0]
+    let rows = doc.program().sfc_programs()[0].blocks[0]
         .editable_rows
         .clone()
         .unwrap();
@@ -2268,7 +2318,7 @@ fn sfc_blank_chart_creation_then_clear_preserves_declarations() {
     assert_eq!(rows[0].title, "Idle");
     assert!(rows[0].initial);
     assert_eq!(rows[1].title, "%MX0");
-    assert_eq!(locals, doc.sfc_variables(0).unwrap());
+    assert_eq!(locals, doc.variable().sfc_variables(0).unwrap());
     let ir = Projection::export(&doc, "next", 0).unwrap();
     let mut edited = ir.text.clone();
     for line in ir
@@ -2282,24 +2332,24 @@ fn sfc_blank_chart_creation_then_clear_preserves_declarations() {
         apply(&mut doc, &op.name, op.args);
     }
     assert!(
-        doc.sfc_programs()[0].blocks[0]
+        doc.program().sfc_programs()[0].blocks[0]
             .editable_rows
             .as_ref()
             .unwrap()
             .is_empty()
     );
-    assert_eq!(locals, doc.sfc_variables(0).unwrap());
+    assert_eq!(locals, doc.variable().sfc_variables(0).unwrap());
     doc.to_verified_bytes().unwrap();
 }
 
 #[test]
 fn sfc_linear_insert_reorder_delete_uses_full_source_snapshots() {
     let mut doc = fixture("sfc/native-loop.xgwx");
-    let original = doc.sfc_programs()[0].blocks[0]
+    let original = doc.program().sfc_programs()[0].blocks[0]
         .editable_rows
         .clone()
         .unwrap();
-    let locals = doc.sfc_variables(0).unwrap();
+    let locals = doc.variable().sfc_variables(0).unwrap();
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     let step = ir
         .text
@@ -2340,7 +2390,7 @@ fn sfc_linear_insert_reorder_delete_uses_full_source_snapshots() {
     for op in ops {
         apply(&mut doc, &op.name, op.args);
     }
-    let after = doc.sfc_programs()[0].blocks[0]
+    let after = doc.program().sfc_programs()[0].blocks[0]
         .editable_rows
         .clone()
         .unwrap();
@@ -2358,12 +2408,12 @@ fn sfc_linear_insert_reorder_delete_uses_full_source_snapshots() {
     }
     assert_eq!(
         original,
-        doc.sfc_programs()[0].blocks[0]
+        doc.program().sfc_programs()[0].blocks[0]
             .editable_rows
             .clone()
             .unwrap()
     );
-    assert_eq!(locals, doc.sfc_variables(0).unwrap());
+    assert_eq!(locals, doc.variable().sfc_variables(0).unwrap());
     doc.to_verified_bytes().unwrap();
 }
 

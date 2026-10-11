@@ -1,5 +1,10 @@
 //! Read-only protocol views. These mappings deliberately do not require the
 //! library's WASM-only Serde implementations or expose opaque program bytes.
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use crate::library_compat::DocumentNamespacesCompat;
+#[cfg(not(feature = "libxgwx-namespaced-api"))]
+use crate::library_compat::base_summaries;
+use crate::library_compat::module_summaries;
 use serde_json::{Value, json};
 use xgwx::*;
 
@@ -179,11 +184,12 @@ fn local_symbol(index: usize, value: &IecLocalSymbol) -> Value {
 }
 
 fn symbols(doc: &XgwxDocument, program_index: Option<usize>, offset: usize, limit: usize) -> Value {
-    let globals = match doc.variables() {
+    let globals = match doc.variable().variables() {
         Ok(items) => indexed_page(&items, offset, limit, global_symbol),
         Err(error) => json!({"status": "decode_error", "error": error.to_string()}),
     };
     let locals = doc
+        .variable()
         .iec_local_symbols()
         .into_iter()
         .enumerate()
@@ -201,8 +207,97 @@ fn symbols(doc: &XgwxDocument, program_index: Option<usize>, offset: usize, limi
         "note": "Local symbol record_offset and identity are revision-specific. SFC declarations are in the sfc section; standalone ST/IL declarations with full snapshots are in text.variables."})
 }
 
+#[cfg(feature = "libxgwx-namespaced-api")]
+fn typed_module(module: &Module) -> Value {
+    let (kind, scope, hardware) = match module {
+        Module::Io(io) => ("io", io.base.configuration_index, Some(&io.base.hardware)),
+        Module::Other(hw) => ("other", hw.configuration_index, Some(&hw.hardware)),
+        Module::Network(net) => (
+            "network",
+            net.configuration_index,
+            net.base.as_ref().map(|hw| &hw.hardware),
+        ),
+    };
+    let mut result = json!({"kind":kind, "configuration_index":scope,
+        "hardware": hardware.map(|hw| { let mut v = fields!(hw; base, slot, id, sub_type, name, comment, details);
+            v["attributes"] = attrs(&hw.attributes); v })});
+    if let Module::Io(io) = module {
+        result["io_kind"] = json!(format!("{:?}", io.kind));
+    }
+    if let Module::Network(net) = module {
+        let mut metadata = network_module(0, &net.metadata);
+        metadata.as_object_mut().unwrap().remove("module_index");
+        result["network"] = metadata;
+        result["hardware_candidates"] = json!(
+            net.hardware_candidates
+                .iter()
+                .map(|hw| {
+                    let mut value =
+                        fields!(&hw.hardware; base, slot, id, sub_type, name, comment, details);
+                    value["attributes"] = attrs(&hw.hardware.attributes);
+                    json!({"configuration_index":hw.configuration_index, "hardware":value})
+                })
+                .collect::<Vec<_>>()
+        );
+        result["configuration"] = match &net.configuration {
+            ConfigurationMatch::Missing => json!({"status":"missing"}),
+            ConfigurationMatch::Matched(c) => {
+                json!({"status":"matched", "settings": typed_settings(c)})
+            }
+            ConfigurationMatch::Ambiguous(cs) => {
+                json!({"status":"ambiguous", "candidates":cs.iter().map(typed_settings).collect::<Vec<_>>()})
+            }
+        };
+    }
+    result
+}
+#[cfg(feature = "libxgwx-namespaced-api")]
+fn typed_settings(config: &NetworkConfiguration) -> Value {
+    match config {
+        NetworkConfiguration::Cnet(c) => json!({"kind":"cnet", "value": cnet_config(c)}),
+        NetworkConfiguration::Fenet(c) => json!({"kind":"fenet", "value": fenet_config(c)}),
+        NetworkConfiguration::Other(c) => {
+            let mut value = fields!(c; kind, station_no, type_code, base, slot, sub_type);
+            value["attributes"] = attrs(&c.attributes);
+            json!({"kind":"other", "value":value})
+        }
+    }
+}
+fn typed_modules(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
+    #[cfg(feature = "libxgwx-namespaced-api")]
+    {
+        page(&doc.modules(), offset, limit, typed_module)
+    }
+    #[cfg(not(feature = "libxgwx-namespaced-api"))]
+    {
+        let _ = (doc, offset, limit);
+        json!({"status":"unavailable", "reason":"The pinned library does not expose typed modules; select a current library override and libxgwx-namespaced-api.", "items":[], "total":null})
+    }
+}
+
+fn hardware_bases(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
+    #[cfg(feature = "libxgwx-namespaced-api")]
+    {
+        page(&doc.bases(), offset, limit, |base| {
+            let summary = base.summary();
+            json!({"base":base.number(), "slot_count":base.slot_count(), "base_index":base.index(),
+            "configuration_index":base.configuration_index(), "attributes":attrs(&summary.attributes),
+            "modules":page(&base.modules(), offset, limit, typed_module)})
+        })
+    }
+    #[cfg(not(feature = "libxgwx-namespaced-api"))]
+    {
+        indexed_page(&base_summaries(doc), offset, limit, |index, base| {
+            let mut result = fields!(base; base, slot_count);
+            result["base_index"] = json!(index);
+            result["attributes"] = attrs(&base.attributes);
+            result
+        })
+    }
+}
+
 fn hardware(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
-    let modules = doc.modules();
+    let modules = module_summaries(doc);
     let selections = modules
         .iter()
         .map(|m| {
@@ -227,11 +322,8 @@ fn hardware(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
         .collect::<Vec<_>>();
     json!({
         "configurations": page(&doc.configurations(), offset, limit, configuration),
-        "bases": page(&doc.bases(), offset, limit, |b| {
-            let mut result = fields!(b; base, slot_count);
-            result["attributes"] = attrs(&b.attributes);
-            result
-        }),
+        "bases": hardware_bases(doc, offset, limit),
+        "typed_modules": typed_modules(doc, offset, limit),
         "modules": page(&selections, offset, limit, Clone::clone),
         "cpu_hardware_profile": doc.cpu_hardware_profile().map(|p| fields!(p;
             cpu_model, variant, builtin_io_base, builtin_io_slot, builtin_io_id,
@@ -289,23 +381,15 @@ fn networks(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
             result["attributes"] = attrs(&value.attributes);
             result
         }),
-        "cnet": indexed_page(&doc.cnet_config_infos(), offset, limit, |index, value| {
-            let mut result = fields!(value; station_no, type_code, base, slot, sub_type);
-            result["config_index"] = json!(index);
-            result["attributes"] = attrs(&value.attributes);
+        "cnet": indexed_page(&doc.network().cnet_config_infos(), offset, limit, |index, value| {
+            let mut result = cnet_config(value);
             result["ports"] = indexed_page(&value.ports, offset, limit, cnet_port);
+            result["config_index"] = json!(index);
             result
         }),
-        "fenet": indexed_page(&doc.fenet_config_infos(), offset, limit, |index, value| {
-            let mut result = fields!(value; station_no, type_code, base, slot, sub_type,
-                media, media_b, dhcp, driver_type, rcv_wait_time, client_wait_time, glofa_socket_count);
+        "fenet": indexed_page(&doc.network().fenet_config_infos(), offset, limit, |index, value| {
+            let mut result = fenet_config(value);
             result["config_index"] = json!(index);
-            result["attributes"] = attrs(&value.attributes);
-            for (key, ip) in [("ip_address", &value.ip_address), ("subnet", &value.subnet),
-                ("gateway", &value.gateway), ("dns", &value.dns), ("ip_address2", &value.ip_address2),
-                ("subnet2", &value.subnet2), ("gateway2", &value.gateway2), ("dns2", &value.dns2)] {
-                result[key] = ipv4(ip);
-            }
             result
         }),
         "cnet_baud_rates": CNET_BAUD_RATES,
@@ -634,6 +718,7 @@ fn sfc_block(value: &SfcBlock, offset: usize, limit: usize) -> Value {
 
 fn sfc(doc: &XgwxDocument, program_index: Option<usize>, offset: usize, limit: usize) -> Value {
     let programs = doc
+        .program()
         .sfc_programs()
         .into_iter()
         .filter(|p| program_index.is_none_or(|index| index == p.program_index))
@@ -663,7 +748,7 @@ pub fn inspect(
     limit: usize,
 ) -> Result<Value, String> {
     if let Some(index) = program_index
-        && index >= doc.programs().len()
+        && index >= doc.program().programs().len()
     {
         return Err(format!("program_index {index} is absent"));
     }
@@ -678,18 +763,18 @@ pub fn inspect(
                 "header": fields!(&doc.header; gzip_offset, signature, label, label_following_u32, compressed_size_hint),
                 "container": {"xml_length": doc.xml.len(), "main_gzip_length": doc.main_gzip.len(),
                     "trailer_length": doc.trailer.len(), "trailer_gzip_members": doc.trailer_gzip_members.len()},
-                "counts": {"programs": doc.programs().len(), "tasks": doc.tasks().len(),
-                    "modules": doc.modules().len(), "networks": doc.networks().len(), "sfc_programs": doc.sfc_programs().len(), "text_programs":doc.text_programs().len()},
+                "counts": {"programs": doc.program().programs().len(), "tasks": doc.program().tasks().len(),
+                    "modules": module_summaries(doc).len(), "networks": doc.networks().len(), "sfc_programs": doc.program().sfc_programs().len(), "text_programs":doc.program().text_programs().len()},
                 "configurations": page(&doc.configurations(), offset, limit, configuration),
-                "programs": indexed_page(&doc.programs(), offset, limit, program_summary),
+                "programs": indexed_page(&doc.program().programs(), offset, limit, program_summary),
                 "sections": SECTIONS,
                 "pagination": "offset/limit apply to each list independently. Collect all pages before constructing expected SFC entity/row/variable lists.",
                 "native_acceptance": "unverified",
             })
         }
         "programs" => json!({
-            "programs": indexed_page(&doc.programs(), offset, limit, program_summary),
-            "tasks": indexed_page(&doc.tasks(), offset, limit, |index, t| {
+            "programs": indexed_page(&doc.program().programs(), offset, limit, program_summary),
+            "tasks": indexed_page(&doc.program().tasks(), offset, limit, |index, t| {
                 let mut value = fields!(t; name, version, type_code, attribute, kind, priority,
                     task_index, device, device_type, word_value, word_condition, bit_condition);
                 value["index"] = json!(index);
@@ -702,6 +787,7 @@ pub fn inspect(
         "networks" => networks(doc, offset, limit),
         "vendor_il" => {
             let programs = doc
+                .program()
                 .vendor_il_programs()
                 .into_iter()
                 .filter(|p| program_index.is_none_or(|i| i == p.program_index))
@@ -718,6 +804,7 @@ pub fn inspect(
         }
         "text" => {
             let programs = doc
+                .program()
                 .text_programs()
                 .into_iter()
                 .filter(|p| program_index.is_none_or(|i| i == p.program_index))
@@ -735,6 +822,7 @@ pub fn inspect(
         "text.variables" => {
             let index = program_index.ok_or("program_index is required for text.variables")?;
             let program = doc
+                .program()
                 .text_programs()
                 .into_iter()
                 .find(|p| p.program_index == index)
@@ -745,6 +833,7 @@ pub fn inspect(
         "sfc.variables" => {
             let index = program_index.ok_or("program_index is required for sfc.variables")?;
             let items = doc
+                .variable()
                 .sfc_variables(index)
                 .map_err(|error| error.to_string())?;
             page(&items, offset, limit, sfc_variable)
@@ -759,6 +848,7 @@ pub fn inspect(
                     "SFC block section must be sfc.block.<numeric block_index>".to_owned()
                 })?;
             let selected = doc
+                .program()
                 .sfc_programs()
                 .into_iter()
                 .find(|p| p.program_index == index)
@@ -776,7 +866,7 @@ pub fn inspect(
         "catalog.modules" => page(xgk_module_catalog(), offset, limit, module_catalog),
         "catalog.instructions" => page(ladder_instruction_catalog(), offset, limit, instruction),
         "catalog.comparisons" => page(ladder_comparison_catalog(), offset, limit, instruction),
-        "io_variables" => match doc.preview_io_variables() {
+        "io_variables" => match doc.variable().preview_io_variables() {
             Ok(items) => page(&items, offset, limit, |v| {
                 fields!(v; base, slot, model, name,
                 address, address_number, data_type, description, source_ref, action, existing_names)
@@ -789,8 +879,9 @@ pub fn inspect(
         {
             let index =
                 program_index.ok_or("program_index is required for program detail sections")?;
-            let summary = program_summary(index, &doc.programs()[index]);
+            let summary = program_summary(index, &doc.program().programs()[index]);
             if let Some(program) = doc
+                .program()
                 .text_programs()
                 .into_iter()
                 .find(|p| p.program_index == index)
@@ -802,7 +893,7 @@ pub fn inspect(
                     json!({"program":summary,"details":text_program(&program,offset,limit)}),
                 );
             }
-            match doc.ladder_program(index) {
+            match doc.program().ladder_program(index) {
                 Some(Ok(program)) => {
                     json!({"program": summary, "details": program_details(&program, section, offset, limit)})
                 }
@@ -831,9 +922,9 @@ pub fn validate(doc: &XgwxDocument) -> Value {
             "checks": ["container serialization", "reparse", "XML and preserved header/trailer verification"]}),
         Err(error) => json!({"status": "verification_error", "error": error.to_string()}),
     };
-    let sfc = doc.sfc_programs();
-    let texts = doc.text_programs();
-    let programs = doc.programs().iter().enumerate().map(|(index, summary)| {
+    let sfc = doc.program().sfc_programs();
+    let texts = doc.program().text_programs();
+    let programs = doc.program().programs().iter().enumerate().map(|(index, summary)| {
         if let Some(program) = texts.iter().find(|p|p.program_index == index) {
             return json!({"program_index":index,"name":summary.name,"format":program.language.to_lowercase(),
                 "status":if program.source.is_some() {"decoded"} else {"decode_error"},"editable":program.editable,
@@ -851,7 +942,7 @@ pub fn validate(doc: &XgwxDocument) -> Value {
                 })).collect::<Vec<_>>(),
                 "note": "Decoded chart structure and supported writer shape; no native compiler check."});
         }
-        match doc.ladder_program(index) {
+        match doc.program().ladder_program(index) {
             Some(Ok(program)) if program.project_type == Some(2) => {
                 let layout = program.iec_circuit_layout();
                 json!({"program_index": index, "name": summary.name, "format": "iec_ld",
@@ -1126,4 +1217,30 @@ mod tests {
                 > 0
         );
     }
+}
+
+fn cnet_config(value: &CnetConfigInfoSummary) -> Value {
+    let mut result = fields!(value; station_no, type_code, base, slot, sub_type);
+    result["attributes"] = attrs(&value.attributes);
+    result["ports"] = indexed_page(&value.ports, 0, 1000, cnet_port);
+    result
+}
+
+fn fenet_config(value: &FenetConfigInfoSummary) -> Value {
+    let mut result = fields!(value; station_no, type_code, base, slot, sub_type,
+                media, media_b, dhcp, driver_type, rcv_wait_time, client_wait_time, glofa_socket_count);
+    result["attributes"] = attrs(&value.attributes);
+    for (key, ip) in [
+        ("ip_address", &value.ip_address),
+        ("subnet", &value.subnet),
+        ("gateway", &value.gateway),
+        ("dns", &value.dns),
+        ("ip_address2", &value.ip_address2),
+        ("subnet2", &value.subnet2),
+        ("gateway2", &value.gateway2),
+        ("dns2", &value.dns2),
+    ] {
+        result[key] = ipv4(ip);
+    }
+    result
 }
