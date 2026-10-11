@@ -14,8 +14,12 @@ fn fixture(path: &str) -> XgwxDocument {
 fn public_mutators(source: &str) -> BTreeSet<String> {
     let mut writers = BTreeSet::new();
     // Identify the bound-handle API independently of crate attributes or docs.
-    let selected_api =
-        source.contains("pub struct Program<'a>") && source.contains("pub struct IecLdEditor<'a>");
+    let selected_api = (source.contains("pub struct Program<'a>")
+        && source.contains("pub struct IecLdEditor<'a>"))
+        || (source.contains("pub struct ModuleEditor<'a>")
+            && source.contains("pub struct BaseEditor<'a>"))
+        || (source.contains("pub struct NetworkEditor<'a>")
+            && source.contains("pub struct NetworkModuleEditor<'a>"));
     for tail in source.split("pub fn ").skip(1) {
         let Some(signature_end) = tail.find("->") else {
             continue;
@@ -25,12 +29,14 @@ fn public_mutators(source: &str) -> BTreeSet<String> {
             continue;
         };
         // Exclusive borrows and editor selection do not mutate project contents.
-        if matches!(name, "program_mut" | "variable_mut")
-            || (selected_api
-                && matches!(
-                    name,
-                    "get" | "iec_ld" | "ladder" | "text" | "sfc" | "vendor_il"
-                ))
+        if matches!(
+            name,
+            "program_mut" | "variable_mut" | "module_mut" | "base_mut" | "network_mut"
+        ) || (selected_api
+            && matches!(
+                name,
+                "get" | "iec_ld" | "ladder" | "text" | "sfc" | "vendor_il"
+            ))
         {
             continue;
         }
