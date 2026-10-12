@@ -274,9 +274,11 @@ fn hardware(doc: &XgwxDocument, offset: usize, limit: usize) -> Value {
     let modules = doc.module().summaries();
     let selections = modules
         .iter()
-        .map(|m| {
+        .enumerate()
+        .map(|(module_index, m)| {
             let mut result =
                 fields!(m; base, slot, id, sub_type, name, comment, details, input_filter_raw);
+            result["module_index"] = json!(module_index);
             result["attributes"] = attrs(&m.attributes);
             result["input_filter"] = m
                 .input_filter

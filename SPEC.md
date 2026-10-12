@@ -15,22 +15,79 @@ All tool arguments and inspection DTO fields use snake_case. Operation names are
 | `list_templates` | none | Compatibility profile IDs, default names/CPU, generated hashes, identity policy and probed compatible CPU models. |
 | `create_file` | `path`, optional `project_name`, `program_name`, `cpu_model`, `program_language`, `template`, `operations=[]`, `dry_run=false` | Created file revision, selected names/CPU/language, template, results and validation; no original revision or backup. |
 | `inspect_file` | `path`, `section="overview"`, optional `program_index`, `offset=0`, `limit=100` | `{path, revision, data}` |
+| `search_project` | `path`, nonempty `query`, optional `kind`, `program_index`, `case_sensitive=false`, `offset=0`, `limit=100`, `expected_revision` | `{path, revision, data}` with one paginated result list, matched fields, linked symbols, native locations and coverage limitations. |
 | `list_modules` | `path`, offset/limit | Revision and installed modules/settings/rack context. |
 | `list_module_catalog` | optional query, offset/limit | Available model catalog; no file required. |
 | `list_variables` | `path`, optional program_index, offset/limit | Revision, globals and IEC locals; SFC declarations retain their dedicated inspection workflow. |
 | `list_networks` | `path`, offset/limit | Revision, network/module metadata and Cnet/FEnet configuration. |
 | `list_operations` | optional `query`, optional `subsystem` | Searchable operation descriptions grouped by subsystem. |
 | `describe_operation` | `name` | Exact JSON argument schema, preconditions, required inspection fields, example, and alias information. |
+| `rename_program` | `path`, `object_ref`, `name`, `dry_run=false` | Verified transaction plus readable `changes`. |
+| `set_module_comment` | `path`, `object_ref`, `comment`, `dry_run=false` | Same; physical selection remains unique. |
+| `set_contact_operand` | `path`, `object_ref`, `operand`, `dry_run=false` | Same; single XGK/IEC contact use. |
+| `prepare_change` | `path`, `changes=[{type,object_ref,name or comment or operand}]` | Dry-run transaction plus readable changes, session-scoped token and expiry. |
+| `commit_change` | `change_token` | Exact-candidate transaction plus readable changes; consumes token after success. |
 | `apply_edits` | `path`, `expected_revision`, `operations=[{name,args}]`, `dry_run=false` | `{path, revision_before, revision_after, changed, dry_run, backup_path, results, validation}` |
 | `get_ir` | `path`, section=program, optional program_index (required for program) | `{path, revision, program_index, format, dialect, text, capabilities, limitations}` |
 | `apply_patch` | `path`, section=program, optional program_index (required for program), `expected_revision`, exact unified `patch`, `dry_run=false` | Same transaction result as `apply_edits`. |
 | `validate_file` | `path` | `{path, revision, validation}` |
 
-`revision` is the SHA-256 digest of the current file bytes. `revision_after` is the candidate digest during dry-run and the saved digest during a successful write. `backup_path` is absent/null when no backup was created. Tool errors carry `code`, `message`, optional `operation_index`, and optional `backup_path` when an original-file backup was retained before a later write failure. Library failures retain their meaningful reason and failed operation context. Stdout contains only MCP traffic.
+`revision` is the SHA-256 digest of the current file bytes. `revision_after` is the candidate digest during dry-run and the saved digest during a successful write. `backup_path` is absent/null when no backup was created. Tool errors carry `code`, `message`, optional `operation_index`/`operation_name`, and optional `backup_path` when an original-file backup was retained before a later write failure. Library failures retain their meaningful reason and failed operation context. Stdout contains only MCP traffic.
 
 Inspection sections include `overview`, `programs`, `program`, `symbols`, `hardware`, `networks`, `sfc`, `sfc.variables`, `sfc.block.<block_index>`, `io_variables`, `program.rows`, `program.records`, `program.cells`, `program.strings`, `program.functions`, `program.references`, `program.operand_links`, `program.graph`, `program.edit_sites`, `catalog.cpu`, `catalog.modules`, `catalog.instructions`, and `catalog.comparisons`. Program-specific sections use `program_index`; use a numeric block index in targeted SFC block sections. Array pages contain `{items,total,offset,limit,next_offset}`; callers must collect complete pages before constructing complete expected snapshots. Return decoded positions, binary offsets, identities, current values, type information, and supported edit sites where available.
 
 Cover CPU/hardware, network/Cnet/FEnet, global and IEC local symbols, program lifecycle, XGK ladder, IEC ladder/functions/topology, and SFC. Track each public writer in `operation-coverage.json`, connecting the library method, exposed operation, schema, and adapter. Serialization and filesystem helpers are internal to the server.
+
+## Semantic search
+
+`search_project` is read-only and requires a known file path. It searches program
+metadata, globals, IEC LD locals and decoded XGK/IEC ladder contacts, coils,
+instructions/functions and native comments. Queries are literal substrings;
+case-insensitive matching uses Unicode lowercase by default. Optional `kind`
+selects `program`, `variable`, `contact`, `coil`, `instruction` or `comment`.
+`program_index` restricts program content while retaining globals.
+
+Link operands to symbol names/addresses by exact case-insensitive equality;
+local names shadow matching global names, while ambiguous address matches stay
+visible. Do not infer expression references or normalize device addresses.
+Search semantic strings, not serialized JSON keys or numeric coordinates.
+Return every matching object separately, with available native locations and
+`matched_fields`. Preserve document-order identities and never invent a missing
+coordinate. Decoded XGK rung order is distinct from physical `raw_y`; IEC
+locations retain `group_index` and `row_index`.
+
+Paginate one matching stream after filtering, with a page size of 1–1000.
+An optional `expected_revision` rejects changed sources with `stale_revision`;
+clients should supply it on subsequent pages and restart after a mismatch.
+Report SFC/ST/IL bodies/declarations, opaque records and decode failures in
+`limitations`. Zero matches is not proof of absence in unsupported content.
+A search result does not establish editability; retain existing edit-site,
+expected-value, identity and revision checks for subsequent mutations.
+
+## Common references and prepared changes
+
+Inspection/search may add `object_ref` to supported program metadata, installed
+physical module records and contact search results. References encode a version,
+source revision and selector plus a SHA-256 fingerprint of canonical path,
+revision, selector and observed snapshot. They are opaque locators, not authority.
+Resolve against current decoded data, check kind/fingerprint and lower to guarded
+public operations. Never substitute a new hash on stale offsets. Unsupported
+marker-only contacts expose no operand-edit reference. No reference cache is needed.
+
+`prepare_change` verifies a batch of 1–128 common changes without filesystem writes
+and caches path, original/candidate hashes, operations and readable summaries in
+memory. Reject multiple changes to the same object in one batch. Keep at most 128
+previews per server instance; tokens expire after 1800 seconds using monotonic
+elapsed time. Tokens identify a server session and are consumed only after a
+successful commit, including no-ops. Failed commits may be retried while valid,
+subject to the original revision/candidate checks.
+
+Commit runs under existing file/process locks and checks regenerated candidate
+bytes against the reviewed candidate hash before backup/replacement. A mismatched
+candidate returns `candidate_changed`. References can survive restarts for an
+unchanged file; preparation tokens cannot. Known tool failures add recovery
+instructions without weakening the original error; writer failures include
+`operation_name` and a `describe_operation` lookup.
 
 ## Transaction and file preservation
 

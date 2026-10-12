@@ -35,6 +35,12 @@ async fn real_stdio_inspection_schema_dry_run_edit_and_validation() {
         names,
         [
             "inspect_file",
+            "search_project",
+            "rename_program",
+            "set_module_comment",
+            "set_contact_operand",
+            "prepare_change",
+            "commit_change",
             "list_modules",
             "list_module_catalog",
             "list_networks",
@@ -71,10 +77,35 @@ async fn real_stdio_inspection_schema_dry_run_edit_and_validation() {
         .await
         .unwrap();
     assert_ne!(inspected.is_error, Some(true));
-    let rev = inspected.structured_content.unwrap()["revision"]
-        .as_str()
-        .unwrap()
-        .to_owned();
+    let inspected = inspected.structured_content.unwrap();
+    let rev = inspected["revision"].as_str().unwrap().to_owned();
+    let matches = client.call_tool(call("search_project", json!({"path":"project.xgwx","query":inspected["data"]["programs"]["items"][0]["name"],"kind":"program","program_index":0}))).await.unwrap();
+    assert_ne!(matches.is_error, Some(true));
+    let matches = matches.structured_content.unwrap();
+    assert_eq!(matches["data"]["total"], 1);
+    assert_eq!(matches["data"]["items"][0]["program_index"], 0);
+    assert_eq!(matches["revision"], rev);
+    let searched = client.call_tool(call("search_project", json!({"path":"project.xgwx","query":"not-present-marker-12345","expected_revision":rev}))).await.unwrap();
+    assert_ne!(searched.is_error, Some(true));
+    let searched = searched.structured_content.unwrap();
+    assert_eq!(searched["revision"], rev);
+    assert_eq!(searched["data"]["total"], 0);
+    assert_eq!(fs::read(&path).unwrap(), original);
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    for args in [
+        json!({"path":"project.xgwx","query":"   "}),
+        json!({"path":"project.xgwx","query":"contact","limit":0}),
+        json!({"path":"project.xgwx","query":"contact","kind":"unknown"}),
+    ] {
+        assert_eq!(
+            client
+                .call_tool(call("search_project", args))
+                .await
+                .unwrap()
+                .is_error,
+            Some(true)
+        );
+    }
     let catalog = client
         .call_tool(call("list_operations", json!({})))
         .await
@@ -116,6 +147,18 @@ async fn real_stdio_inspection_schema_dry_run_edit_and_validation() {
     assert_eq!(
         validated.structured_content.unwrap()["revision"],
         saved["revision_after"]
+    );
+    let stale_search = client
+        .call_tool(call(
+            "search_project",
+            json!({"path":"project.xgwx","query":"contact","expected_revision":rev,"offset":1}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(stale_search.is_error, Some(true));
+    assert_eq!(
+        stale_search.structured_content.unwrap()["error"]["code"],
+        "stale_revision"
     );
     let stale = client
         .call_tool(call(

@@ -75,8 +75,14 @@ Configure a stdio MCP client using the binary's absolute path and arguments. An 
 | `list_variables` | List globals and IEC locals, optionally selecting a program. |
 | `list_networks` | List configured networks, linked modules and Cnet/FEnet settings. |
 | `inspect_file` | Read the file's SHA-256 revision, project metadata, programs, symbols, hardware, networks, SFC, catalogs, and available edit sites. |
+| `search_project` | Find decoded programs, variables, contacts, coils, instructions and comments inside a known project, with revision-scoped locations and linked symbol descriptions. |
 | `list_operations` | Find supported writer operations by query or subsystem. |
 | `describe_operation` | Obtain an operation's exact argument schema, constraints, inspection requirements, and example. |
+| `rename_program` | Rename one program using its revision-bound object reference. |
+| `set_module_comment` | Update one installed module comment using its object reference. |
+| `set_contact_operand` | Change one XGK/IEC contact operand, preserving the existing writer guards. |
+| `prepare_change` | Preview a batch of common edits with before/after values and an exact candidate token. |
+| `commit_change` | Save the prepared candidate if the source and candidate still match. |
 | `apply_edits` | Apply ordered operations using the inspected revision; optionally dry-run the same transaction without writing files. |
 | `get_ir` | Export deterministic positional XGK/IEC ladder or SFC text with native comments, symbol descriptions, physical wires and read-only derived connections. |
 | `apply_patch` | Lower an exact unified diff into guarded writer operations and save one verified transaction. |
@@ -85,6 +91,91 @@ Configure a stdio MCP client using the binary's absolute path and arguments. An 
 Operation names preserve the indexed writer protocol, with snake_case arguments; adapters bind those coordinates to the current Rust editors. The live operation catalog is the source of truth for supported arguments and compatibility aliases; [operation-coverage.json](operation-coverage.json) records writer coverage. No PLC connection is involved.
 
 Start with [SKILLS.md](SKILLS.md) for installation and an editing walkthrough. The portable agent skill is [skills/xgwx-edit/SKILL.md](skills/xgwx-edit/SKILL.md). The implementation contract is [SPEC.md](SPEC.md).
+
+## Search within a project
+
+Use shell commands to locate `.xgwx` files, then search their decoded objects:
+
+```json
+{"path":"machine.xgwx","query":"Feed conveyor","kind":"contact"}
+```
+
+`search_project` matches literal substrings in names, addresses, descriptions,
+operands, instruction mnemonics and comments, ignoring case by default. `kind`
+is optional (`program`, `variable`, `contact`, `coil`, `instruction`, `comment`);
+`program_index` restricts program content while retaining global variables.
+`case_sensitive:true` enables case-sensitive matching. Empty/whitespace-only
+queries are rejected. Addresses are not normalized and expressions are not parsed.
+Contacts, coils and instruction operands are linked to symbols by exact
+case-insensitive name/address, so a symbol description can find its ladder uses.
+A local name shadows the same global name; ambiguous address matches remain visible.
+
+Results use `{path,revision,data}`. `data` contains a single paginated
+`{items,total,offset,limit,next_offset}` list plus `limitations`. Each item carries
+its `kind`, `matched_fields`, decoded values and available program identity/location.
+Variable indices and ladder offsets refer to the returned revision. XGK locations
+include native `raw_x`/`raw_y` and decoded `rung_index` when known; IEC locations
+include native `group_index`/`row_index` and record/string offsets. Instruction
+locations without decoded coordinates retain only the known string offset.
+Use `expected_revision` from the first response with subsequent `offset` pages;
+a changed source returns `stale_revision` so the search can restart consistently.
+
+This first version searches program metadata, globals, IEC LD locals and XGK/IEC
+ladder bodies. SFC/ST/IL bodies and declarations, opaque records and decode failures
+are reported in `limitations`; zero matches is not proof that unsupported content
+contains no references. Search does not certify editability. Inspect the relevant
+edit sites or export `get_ir` before preparing a guarded edit. Search is read-only
+and creates no backups or lock sidecars.
+
+## Common edits and reviewable changes
+
+Supported search results and program/hardware inspection objects include an
+opaque `object_ref`. Copy it as-is; it is bound to the canonical file path,
+revision, object kind and observed identity/value. It is a locator, not permission
+or a guarantee of writability. References survive server restarts while the same
+file remains unchanged; preview tokens are limited to the current server session.
+
+- `rename_program(path, object_ref, name, dry_run?)`: use a program reference from
+  `search_project` or `inspect_file` overview/programs/program metadata.
+- `set_module_comment(path, object_ref, comment, dry_run?)`: use a physical module
+  reference from `list_modules` or `inspect_file(section:"hardware")`.
+- `set_contact_operand(path, object_ref, operand, dry_run?)`: use a contact
+  reference from `search_project`. It changes one use, not a declaration or all
+  references. Marker-only contacts without an operand string have no reference.
+
+These tools derive revision/identity/expected-value arguments, then call the same
+public writers and verified atomic-save pipeline as `apply_edits`. They save
+immediately unless `dry_run:true`. Responses include human-readable `changes`
+with target, field, before and after values, plus the usual validation/backup data.
+
+To review a batch once and commit the exact candidate:
+
+```json
+{"path":"machine.xgwx","changes":[{"type":"rename_program","object_ref":"<program reference>","name":"Conveyor"},{"type":"set_module_comment","object_ref":"<module reference>","comment":"Feed conveyor"}]}
+```
+
+Call `prepare_change` with that request. It verifies without creating a file,
+backup or lock sidecar and returns `changes`, `validation`, `revision_before`,
+`revision_after` and `change_token`. Then call `commit_change`:
+
+```json
+{"change_token":"<token from the reviewed preview>"}
+```
+
+The server retains the operations and hashes in memory. Under the existing
+transaction locks, commit rechecks the source revision and regenerated candidate
+hash before any backup/replacement. A successful commit consumes the token.
+Tokens expire after 30 minutes and do not survive a server restart. At most 128
+previews are retained, and batches contain 1–128 changes with each object used
+once. No-op saves consume their token without creating a backup.
+
+Errors retain their existing code/message/index/backup fields and add `recovery`
+for known failures. Writer failures also identify `operation_name` and its schema
+lookup. A stale reference requires renewed inspection and a rebuilt change;
+expired/unknown tokens require a new preview. Do not replace a revision on stale
+coordinates or delete a retained recovery backup. Native XG5000 acceptance remains
+separate from local verification. See the portable
+[common edit guide](skills/xgwx-edit/references/common-edits.md).
 
 ## Property text patches
 

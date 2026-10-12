@@ -1,6 +1,8 @@
+pub mod common;
 pub mod inspection;
 pub mod operation_types;
 pub mod operations;
+pub mod search;
 pub mod server;
 pub mod storage;
 pub mod text_ir;

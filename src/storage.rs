@@ -41,6 +41,8 @@ pub struct StoreError {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_index: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub backup_path: Option<PathBuf>,
 }
 impl StoreError {
@@ -49,6 +51,7 @@ impl StoreError {
             code,
             message: message.to_string(),
             operation_index: None,
+            operation_name: None,
             backup_path: None,
         }
     }
@@ -244,6 +247,7 @@ impl FileStore {
                 code: "operation_failed",
                 message,
                 operation_index: Some(index),
+                operation_name: Some(operation.name.clone()),
                 backup_path: None,
             })?;
             results.push(json!({"index":index,"name":operation.name,"result":result}));
@@ -322,11 +326,35 @@ impl FileStore {
         })
     }
 
+    /// Commit only the verified candidate seen during preparation.
+    pub fn apply_prepared(
+        &self,
+        input: &str,
+        expected: &str,
+        operations: &[EditOperation],
+        candidate: &str,
+    ) -> Result<Value, StoreError> {
+        self.transact_checked(input, expected, false, Some(candidate), |_| {
+            Ok(operations.to_vec())
+        })
+    }
+
     fn transact(
         &self,
         input: &str,
         expected: &str,
         dry_run: bool,
+        compile: impl FnOnce(&XgwxDocument) -> Result<Vec<EditOperation>, StoreError>,
+    ) -> Result<Value, StoreError> {
+        self.transact_checked(input, expected, dry_run, None, compile)
+    }
+
+    fn transact_checked(
+        &self,
+        input: &str,
+        expected: &str,
+        dry_run: bool,
+        expected_candidate: Option<&str>,
         compile: impl FnOnce(&XgwxDocument) -> Result<Vec<EditOperation>, StoreError>,
     ) -> Result<Value, StoreError> {
         let path = self.resolve(input)?;
@@ -367,6 +395,7 @@ impl FileStore {
                 code: "operation_failed",
                 message,
                 operation_index: Some(index),
+                operation_name: Some(operation.name.clone()),
                 backup_path: None,
             })?;
             results.push(json!({"index":index,"name":operation.name,"result":result}));
@@ -375,6 +404,12 @@ impl FileStore {
             .to_verified_bytes()
             .map_err(|e| StoreError::new("verification_failed", e))?;
         let after = revision(&output);
+        if expected_candidate.is_some_and(|candidate| candidate != after) {
+            return Err(StoreError::new(
+                "candidate_changed",
+                "Regenerated output differs from the reviewed candidate; prepare a fresh preview",
+            ));
+        }
         let changed = output != original;
         let validation = crate::inspection::validate(&doc);
         let backup = if changed && !dry_run {

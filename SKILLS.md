@@ -78,6 +78,23 @@ Pass this to `inspect_file`. It returns `{path,revision,data}`. Use `programs` t
 
 Other sections include `program`, `symbols`, `hardware`, `networks`, `sfc`, `sfc.variables`, `sfc.block.<block_index>`, `io_variables`, `program.rows`, `program.records`, `program.cells`, `program.strings`, `program.functions`, `program.references`, `program.operand_links`, `program.graph`, and CPU/module/instruction/comparison catalogs under `catalog.*`. Array results are paged as `{items,total,offset,limit,next_offset}`; `limit` is 1–1000 and defaults to 100. Follow `next_offset` using `offset` until null when a complete snapshot is needed; use a consistent revision across pages. Supply `program_index` for paging local symbols or SFC snapshots. For complete SFC entities/rows use a targeted block section such as `sfc.block.0`; for declarations use `sfc.variables`.
 
+If the target is known by name, address, description, operand, mnemonic or comment,
+use `search_project` before loading detailed sections:
+
+```json
+{"path":"/path/to/projects/machine.xgwx","query":"Feed conveyor","kind":"contact"}
+```
+
+Kinds are optional: `program`, `variable`, `contact`, `coil`, `instruction`,
+`comment`. Match is a case-insensitive literal substring by default. Results
+include matched fields, linked symbol descriptions, revision-scoped locations
+and explicit coverage limitations. `program_index` filters programs but keeps
+globals. Follow the single result list's `next_offset` with `expected_revision`
+from the first page. On `stale_revision`, restart; do not combine pages.
+SFC/ST/IL bodies and declarations require their existing inspection sections.
+Search locations help select a target; inspect edit sites or export `get_ir`
+before editing, since a decoded match does not establish writability.
+
 Discover operation names through `list_operations`, optionally with `query` or `subsystem`, and obtain exact arguments through `describe_operation`:
 
 ```json
@@ -113,6 +130,25 @@ changes require a sole mutation and renewed export. Read
 Use `get_ir` with `path` and `program_index` to export a program as `xgwx-ir/1` text. Send an exact unified diff through `apply_patch`, with the same path/program index, exported `expected_revision`, and optional `dry_run`. This supports SFC linear row creation/deletion/reordering and existing row fields, guarded direct entity comments/conditions and declaration descriptions, plus XGK contact/coil and catalog instruction/comparison creation/deletion and instruction mnemonic/operand edits, IEC empty-row/terminal-coil creation and isolated/connected-contact and terminal-coil deletion, physical-wire deletion and supported vertical-wire creation, XGK/IEC contact and coil changes, bound IEC function operand edits and captured arithmetic/comparison name changes, native comment text, symbol descriptions, and XGK comment creation/rung-comment deletion. Native positions and connectivity remain explicit; unsupported moves and derived connection changes are rejected. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation in a patch; commit and re-export before dependent edits. Read the portable [text IR reference](skills/xgwx-edit/references/text-ir.md) for syntax, comment semantics and examples.
 
 Patch edits use the same immediate-save, backup and verified transaction behavior as `apply_edits`. The server derives current source offsets and expected values under its locks. Re-export after saves rather than guessing identities or reusing offsets.
+
+## Common edit tools and prepared previews
+
+Programs from `inspect_file` and `search_project`, physical modules from
+`list_modules`/hardware inspection, and supported contacts from `search_project`
+include `object_ref`. Use it with `rename_program(path, object_ref, name)`,
+`set_module_comment(path, object_ref, comment)` or
+`set_contact_operand(path, object_ref, operand)`. Add `dry_run:true` to preview;
+these tools otherwise save immediately with the normal backup/verification.
+Their `changes` list explains target, field and before/after values.
+
+For reviewable batches, read the portable
+[common edit guide](skills/xgwx-edit/references/common-edits.md). Call
+`prepare_change(path, changes:[{type, object_ref, name|comment|operand}])`, review
+its changes and validation, then call `commit_change(change_token)` to save the
+exact candidate. Tokens are single-use after success, session-scoped, expire in
+30 minutes and retain no candidate file. References are bound to file/revision;
+reinspect and rebuild after stale failures. Known errors return `recovery`, and
+writer failures include `operation_name` for exact schema discovery.
 
 ## Save an inspected change
 

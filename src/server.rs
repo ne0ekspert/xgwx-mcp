@@ -16,11 +16,13 @@ use serde_json::{Value, json};
 pub struct XgwxServer {
     store: FileStore,
     tool_router: ToolRouter<Self>,
+    prepared: std::sync::Arc<std::sync::Mutex<crate::common::PreparedChanges>>,
 }
 impl XgwxServer {
     pub fn new(store: FileStore) -> Self {
         Self {
             store,
+            prepared: Default::default(),
             tool_router: Self::tool_router(),
         }
     }
@@ -169,10 +171,73 @@ pub struct ModuleCatalogRequest {
     pub limit: usize,
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RenameProgramRequest {
+    pub path: String,
+    pub object_ref: String,
+    pub name: String,
+    #[serde(default)]
+    pub dry_run: bool,
+}
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleCommentRequest {
+    pub path: String,
+    pub object_ref: String,
+    pub comment: String,
+    #[serde(default)]
+    pub dry_run: bool,
+}
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ContactOperandRequest {
+    pub path: String,
+    pub object_ref: String,
+    pub operand: String,
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
 fn result(value: Result<Value, StoreError>) -> CallToolResult {
     match value {
         Ok(value) => CallToolResult::structured(value),
-        Err(error) => CallToolResult::structured_error(json!({"error":error})),
+        Err(error) => {
+            let mut detail = json!(error);
+            let recovery = match error.code {
+                "stale_revision" => Some(
+                    json!({"action":"reinspect","tools":["search_project","inspect_file","list_modules"],"instruction":"Read the current target and rebuild the change with a new reference/revision; do not replace the hash on stale coordinates."}),
+                ),
+                "invalid_object_ref" | "reference_kind_mismatch" => Some(
+                    json!({"action":"select_target_again","tools":["search_project","inspect_file","list_modules"],"instruction":"Use object_ref from the matching object in this file. References are scoped to the file, revision and kind."}),
+                ),
+                "invalid_change_token" | "expired_change_token" | "candidate_changed" => Some(
+                    json!({"action":"prepare_again","tools":["prepare_change"],"instruction":"Inspect the target again and prepare a fresh change. Tokens last 30 minutes and are consumed after a successful commit."}),
+                ),
+                "operation_failed" | "unsupported_target" => Some(
+                    json!({"action":"inspect_constraints","tools":["inspect_file","describe_operation"],"instruction":"Inspect the target/edit sites and the failed writer's constraints. Correct the request or report the unsupported edit; do not bypass guards with raw byte/XML edits."}),
+                ),
+                "path_error" | "outside_roots" => Some(
+                    json!({"action":"check_path","instruction":"Locate the file with shell commands and use its canonical path inside the server's configured roots. Relative paths use the server startup directory."}),
+                ),
+                "preview_capacity" => Some(
+                    json!({"action":"release_preview_capacity","tools":["commit_change"],"instruction":"Commit a reviewed pending change or wait for its 30-minute expiry before preparing another. Do not commit a change just to free capacity."}),
+                ),
+                _ => None,
+            };
+            if let Some(recovery) = recovery {
+                detail["recovery"] = recovery;
+            }
+            if let Some(name) = &error.operation_name {
+                detail["recovery"]["describe_operation"] = json!({"name":name});
+            }
+            if error.backup_path.is_some() {
+                detail["recovery"]["backup_instruction"] = json!(
+                    "Keep and report the retained backup_path; do not delete the recovery artifact."
+                );
+            }
+            CallToolResult::structured_error(json!({"error":detail}))
+        }
     }
 }
 async fn blocking(
@@ -240,7 +305,7 @@ impl XgwxServer {
                 ));
             }
             let (path, revision, doc) = store.read(&request.path)?;
-            let data = inspection::inspect(
+            let mut data = inspection::inspect(
                 &doc,
                 &request.section,
                 request.program_index,
@@ -248,7 +313,155 @@ impl XgwxServer {
                 request.limit,
             )
             .map_err(|e| StoreError::new("inspection_failed", e))?;
+            crate::common::annotate(&doc, &path, &revision, &mut data);
             Ok(json!({"path":path,"revision":revision,"data":data}))
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Search decoded objects inside an existing XGWX project by literal name, address, description, operand, instruction mnemonic or comment. Returns revision-scoped program and native ladder locations, matched fields, linked symbols, one paginated result list and explicit decode/coverage limitations. Optional kind/program filters; global variables remain included. No filesystem discovery. Pass expected_revision on subsequent pages to reject changed snapshots. SFC/ST/IL bodies and declarations are not covered; search does not certify editability.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn search_project(
+        &self,
+        Parameters(request): Parameters<crate::search::SearchRequest>,
+    ) -> CallToolResult {
+        let store = self.store.clone();
+        blocking(move || {
+            let (path, revision, doc) = store.read(&request.path)?;
+            if request
+                .expected_revision
+                .as_ref()
+                .is_some_and(|expected| expected != &revision)
+            {
+                return Err(StoreError::new(
+                    "stale_revision",
+                    "File changed since the previous search; restart search with current data.",
+                ));
+            }
+            let mut data = crate::search::search(&doc, &request)?;
+            crate::common::annotate(&doc, &path, &revision, &mut data);
+            Ok(json!({"path":path,"revision":revision,"data":data}))
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Rename one program using its object_ref from search_project or inspect_file. Derives identity/revision guards and saves one verified transaction with backup. dry_run returns before/after values without saving. Use prepare_change for a reusable preview token.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn rename_program(
+        &self,
+        Parameters(request): Parameters<RenameProgramRequest>,
+    ) -> CallToolResult {
+        let store = self.store.clone();
+        blocking(move || {
+            crate::common::apply(
+                &store,
+                &request.path,
+                crate::common::Change::RenameProgram {
+                    object_ref: request.object_ref,
+                    name: request.name,
+                },
+                request.dry_run,
+            )
+        })
+        .await
+    }
+    #[tool(
+        description = "Update one installed module's comment using object_ref from list_modules or inspect_file hardware. Physical selection must be unique. Preserves model/options and existing writer guards. Saves with backup; dry_run previews before/after values.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn set_module_comment(
+        &self,
+        Parameters(request): Parameters<ModuleCommentRequest>,
+    ) -> CallToolResult {
+        let store = self.store.clone();
+        blocking(move || {
+            crate::common::apply(
+                &store,
+                &request.path,
+                crate::common::Change::SetModuleComment {
+                    object_ref: request.object_ref,
+                    comment: request.comment,
+                },
+                request.dry_run,
+            )
+        })
+        .await
+    }
+    #[tool(
+        description = "Change a single XGK/IEC contact operand using object_ref from search_project. Derives current string offset/expected operand and retains library type/layout guards. Saves with backup; dry_run previews before/after values. Does not rename a symbol or change other uses.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn set_contact_operand(
+        &self,
+        Parameters(request): Parameters<ContactOperandRequest>,
+    ) -> CallToolResult {
+        let store = self.store.clone();
+        blocking(move || {
+            crate::common::apply(
+                &store,
+                &request.path,
+                crate::common::Change::SetContactOperand {
+                    object_ref: request.object_ref,
+                    operand: request.operand,
+                },
+                request.dry_run,
+            )
+        })
+        .await
+    }
+    #[tool(
+        description = "Prepare 1–128 common changes as one verified dry-run transaction. Each change uses an inspected object_ref. Returns readable target/field/before/after values, validation, exact candidate hash and a session-scoped change_token lasting 30 minutes. Creates no files or sidecars; does not save. Review the result then call commit_change with the token.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn prepare_change(
+        &self,
+        Parameters(request): Parameters<crate::common::PrepareRequest>,
+    ) -> CallToolResult {
+        let store = self.store.clone();
+        let prepared = self.prepared.clone();
+        blocking(move || {
+            prepared
+                .lock()
+                .map_err(|e| StoreError::new("lock_error", e))?
+                .prepare(&store, request)
+        })
+        .await
+    }
+    #[tool(
+        description = "Commit the exact candidate from prepare_change using only its change_token. Rejects stale source revisions, expired/unknown tokens and candidate drift. Saves atomically with the original-file backup and consumes the token after success. Local verification does not establish native XG5000 acceptance.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn commit_change(
+        &self,
+        Parameters(request): Parameters<crate::common::CommitRequest>,
+    ) -> CallToolResult {
+        let store = self.store.clone();
+        let prepared = self.prepared.clone();
+        blocking(move || {
+            prepared
+                .lock()
+                .map_err(|e| StoreError::new("lock_error", e))?
+                .commit(&store, &request.change_token)
         })
         .await
     }
@@ -264,7 +477,8 @@ impl XgwxServer {
         let store = self.store.clone();
         blocking(move || {
             let (path,revision,doc)=store.read(&request.path)?;
-            let data=inspection::inspect(&doc,"hardware",None,request.offset,request.limit).map_err(|e|StoreError::new("inspection_failed",e))?;
+            let mut data=inspection::inspect(&doc,"hardware",None,request.offset,request.limit).map_err(|e|StoreError::new("inspection_failed",e))?;
+            crate::common::annotate(&doc,&path,&revision,&mut data);
             Ok(json!({"path":path,"revision":revision,"data":data,"catalog_tool":"list_module_catalog","patch_section":"modules"}))
         }).await
     }
@@ -455,5 +669,5 @@ impl XgwxServer {
     }
 }
 
-#[tool_handler(router = self.tool_router, name = "xgwx-mcp", version = "0.1.0", instructions = "Inspect the file and use the current revision for edits. Use focused list_modules/list_variables/list_networks discovery and list_module_catalog for available hardware. Export get_ir section modules/variables/networks for marked property edits, or section program with program_index for positional ladder/SFC text. Send an exact unified diff to apply_patch with the same section and selection. For direct operations, discover schemas with list_operations/describe_operation. Edits save immediately with backups. Re-inspect after structural edits. Local validation does not certify XG5000 or PLC acceptance.")]
+#[tool_handler(router = self.tool_router, name = "xgwx-mcp", version = "0.1.0", instructions = "Inspect the file and use the current revision for edits. Use search_project to locate decoded objects by name/address/description/operand/mnemonic/comment, then inspect edit sites before editing. Common tools rename_program/set_module_comment/set_contact_operand accept object_ref. Use prepare_change for readable before/after and commit_change with its token to save the reviewed candidate. Use focused list_modules/list_variables/list_networks discovery and list_module_catalog for available hardware. Export get_ir section modules/variables/networks for marked property edits, or section program with program_index for positional ladder/SFC text. Send an exact unified diff to apply_patch with the same section and selection. For direct operations, discover schemas with list_operations/describe_operation. Edits save immediately with backups. Re-inspect after structural edits. Local validation does not certify XG5000 or PLC acceptance.")]
 impl ServerHandler for XgwxServer {}

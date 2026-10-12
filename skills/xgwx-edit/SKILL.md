@@ -5,12 +5,12 @@ description: Inspect and edit local LS XG5000 .xgwx projects through the xgwx-mc
 
 # XGWX editing
 
-Use the configured `xgwx-mcp` tools for supported local project edits. Each successful changed `apply_edits` or `apply_patch` request immediately saves the source and retains an adjacent backup. The skill folder is portable; its references require no sibling repository. A stdio MCP connection to the server must already be available.
+Use the configured `xgwx-mcp` tools for supported local project edits. Each successful changed `apply_edits`, `apply_patch`, common edit tool or `commit_change` request immediately saves the source and retains an adjacent backup. The skill folder is portable; its references require no sibling repository. A stdio MCP connection to the server must already be available.
 
 ## Inspect, discover, edit
 
 1. Call `inspect_file` with `path` and `section:"overview"` to obtain `revision` and identify the CPU/project. Paths are absolute or relative to the server's startup directory and must resolve inside an allowed root.
-2. Inspect the target subsystem. `programs` identifies document-order program indices and object identities. For program detail or `program.*` sections, supply `program_index`. SFC entities/rows use targeted `sfc.block.<numeric block index>` and declarations use `sfc.variables`, both with `program_index`. Arrays use `{items,total,offset,limit,next_offset}`; collect complete pages at one revision when constructing an expected snapshot.
+2. For a target described by name, address, description, operand, mnemonic or comment, call `search_project(path, query, kind?, program_index?)`. Results include matched fields, linked symbols, revision-scoped locations and limitations. Pagination uses one list; supply `expected_revision` from page one for later pages and restart on stale revisions. SFC/ST/IL bodies and declarations are outside search coverage. A search match does not establish editability. Inspect the target subsystem. `programs` identifies document-order program indices and object identities. For program detail or `program.*` sections, supply `program_index`. SFC entities/rows use targeted `sfc.block.<numeric block index>` and declarations use `sfc.variables`, both with `program_index`. Arrays use `{items,total,offset,limit,next_offset}`; collect complete pages at one revision when constructing an expected snapshot.
 3. Call `list_operations` with a relevant `query` or `subsystem`, then `describe_operation` for the selected name. Use its exact schema, constraints, inspection requirements, and examples. Fixture-verified examples include setup operations and source hashes; replace fixture-specific positions/identities using actual inspection. Arguments use Rust method names in snake_case; preserve nested `patch` or `edit` names. Compatibility aliases share their documented handler.
 4. Prepare `apply_edits` with `path`, the inspected `expected_revision`, and ordered `operations:[{name,args}]`. Copy offsets, positions, identities, and expected values from inspection. Preserve all expected-value checks. Use `dry_run:true` when a preview is useful.
 5. Save with `dry_run:false` using the original inspected revision. Report the returned revision, changed status, backup path, and validation. Re-inspect after structural changes before preparing edits that depend on moved indices or offsets.
@@ -20,6 +20,22 @@ Dry-run uses the same editing and verification pipeline without saving files or 
 Cooperating server saves use a persistent `.xgwx-mcp.lock` sidecar. Coordinate simultaneous edits with XG5000 or other programs that ignore the advisory lock; the revision recheck can detect changes but does not lock those programs.
 
 Use `validate_file(path)` to report container verification and available decoded-program diagnostics separately. When the library rejects a format, topology, type, or edit site, report its precise reason and retain the source. If a later save failure returns `error.backup_path`, report the retained recovery artifact. Do not bypass restrictions with raw XML/binary rewriting or weaken expected-value checks. Backup retention does not authorize automatic deletion or rollback.
+
+## Common edits and reusable previews
+
+For renaming a program, updating a module comment or changing one contact
+operand, read [common-edits.md](references/common-edits.md). Copy `object_ref`
+from the target inspection/search object and use `rename_program`,
+`set_module_comment` or `set_contact_operand`. These derive writer coordinates
+and guards; `dry_run:true` previews and the default saves immediately.
+
+Use `prepare_change` for a reviewed batch of common edits, then
+`commit_change(change_token)` to save the exact verified candidate. Inspect the
+readable changes and validation first. Tokens are single-use after success,
+session-scoped and expire after 30 minutes; references are file/revision-bound.
+Reinspect and rebuild when stale. Known errors provide `recovery`; writer errors
+identify the operation and schema lookup. Preserve existing native constraints
+and report native acceptance as unverified unless XG5000 was checked.
 
 ## New project files
 
