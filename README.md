@@ -4,28 +4,32 @@ Local Rust stdio MCP server for inspecting and editing LS XG5000 `.xgwx` files t
 
 ## Build and run
 
-Build with Rust 1.88 or newer. Cargo fetches [libxgwx](https://github.com/ne0ekspert/libxgwx)
-at pinned revision `623573b1f8dc4e8a3c4155ee56cc13b76f36292b` with its `write` and `il` features enabled.
+Build with Rust 1.88 or newer. Cargo fetches [libxgwx](https://crates.io/crates/libxgwx)
+version `0.1.0` with its `write` and `il` features enabled; `Cargo.lock` records the resolved release.
 No sibling checkout or dependency patch is required. The historical bundled
 rename-project patch is retained for older library baselines only.
 
 For local library development, add this override to `.cargo/config.toml`:
 
 ```toml
-[patch."https://github.com/ne0ekspert/libxgwx"]
+[patch.crates-io]
 libxgwx = { path = "/path/to/libxgwx" }
 ```
 
-Run `cargo update -p libxgwx` to select the override, including when its version
-differs from the pinned library. Restore
-`Cargo.lock` before committing unless deliberately updating the pinned dependency.
-Tests and instruction-guide tools resolve the actual library source through
-Cargo metadata, including local overrides. Public fixture data stays in the
-library's own checkout. Instruction generation also accepts `--library-root`.
+Run `cargo update -p libxgwx` to select the override; its version must satisfy
+the dependency's version requirement. Restore `Cargo.lock` before committing
+unless deliberately updating the dependency.
+Instruction-guide tools resolve the actual library source through Cargo metadata,
+including local overrides. Instruction generation also accepts `--library-root`.
+The published crate excludes regression fixtures. To run fixture-based Rust tests
+against the published dependency, set `LIBXGWX_TEST_ROOT` to a libxgwx repository
+checkout containing `fixtures/`, then run `cargo test --locked`. This selects test
+data only; source audits still use the compiled dependency. The same environment
+variable supplies fixtures to Python instruction-guide tests.
 
 MCP uses the current namespaced library API by default; no opt-in feature is
-required. The library version remains `0.1.0`, and its Git revision is pinned in
-`Cargo.toml` and `Cargo.lock`.
+required. `Cargo.toml` specifies the library version requirement, and `Cargo.lock`
+pins the resolved crates.io release and checksum.
 
 Program lifecycle and language-specific edits use selected handles such as
 `doc.program_mut().get(index)?.iec_ld()?`. Protocol adapters preserve incoming

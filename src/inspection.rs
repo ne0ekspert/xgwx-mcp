@@ -974,7 +974,7 @@ mod tests {
 
     fn fixture(relative: &str) -> XgwxDocument {
         XgwxDocument::from_path(
-            crate::test_support::library_root()
+            crate::test_support::fixture_root()
                 .join("fixtures")
                 .join(relative),
         )

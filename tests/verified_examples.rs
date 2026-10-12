@@ -2,7 +2,7 @@
 mod test_support;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
-use test_support::library_root;
+use test_support::fixture_root;
 use xgwx::XgwxDocument;
 use xgwx_mcp::{
     operations::{apply_operation, describe_operation},
@@ -15,7 +15,7 @@ fn executable_examples_succeed_reparse_and_preserve_unrelated_payloads() {
     let mut names = BTreeSet::new();
     for case in catalog["cases"].as_array().unwrap() {
         let id = case["id"].as_str().unwrap();
-        let path = library_root()
+        let path = fixture_root()
             .join("fixtures")
             .join(case["fixture"].as_str().unwrap());
         let bytes = std::fs::read(path).unwrap();

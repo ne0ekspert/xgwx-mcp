@@ -220,13 +220,14 @@ class _StdioClient:
 
 
 def _stdio_catalogs(library_root: Path, binary: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    fixture = library_root / "fixtures/elements.xgwx"
+    fixture_root = Path(os.environ.get("LIBXGWX_TEST_ROOT", library_root)).resolve()
+    fixture = fixture_root / "fixtures/elements.xgwx"
     if not fixture.is_file():
-        fixture = next(iter(sorted((library_root / "fixtures").rglob("*.xgwx"))), None)
+        fixture = next(iter(sorted((fixture_root / "fixtures").rglob("*.xgwx"))), None)
     if fixture is None:
-        raise ValueError("a harmless existing .xgwx fixture is required for MCP catalog inspection")
+        raise ValueError("MCP catalog inspection requires fixtures; set LIBXGWX_TEST_ROOT to a libxgwx repository checkout")
     catalogs = []
-    with _StdioClient(binary, library_root) as client:
+    with _StdioClient(binary, fixture_root) as client:
         for section in ("catalog.instructions", "catalog.comparisons"):
             items, offset = [], 0
             while True:
@@ -419,7 +420,7 @@ if __name__ == "__main__":
 
 
 def resolve_library_root() -> Path:
-    """Locate the pinned Cargo dependency (or its local patch override)."""
+    """Locate the resolved Cargo dependency (or its local patch override)."""
     import subprocess
     root = Path(__file__).resolve().parents[1]
     output = subprocess.check_output(

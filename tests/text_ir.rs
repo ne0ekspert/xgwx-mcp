@@ -1,14 +1,14 @@
 #[path = "../src/test_support.rs"]
 mod test_support;
 use std::fs;
-use test_support::library_root;
+use test_support::fixture_root;
 use xgwx::XgwxDocument;
 use xgwx_mcp::{
     storage::{FileStore, revision},
     text_ir::{Projection, apply_unified_patch},
 };
 fn fixture(name: &str) -> XgwxDocument {
-    XgwxDocument::from_path(library_root().join("fixtures").join(name)).unwrap()
+    XgwxDocument::from_path(fixture_root().join("fixtures").join(name)).unwrap()
 }
 fn replace_patch(text: &str, old: &str, new: &str) -> String {
     let lines = text.lines().collect::<Vec<_>>();

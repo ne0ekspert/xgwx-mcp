@@ -2,13 +2,13 @@
 mod test_support;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
-use test_support::library_root;
+use test_support::{fixture_root, library_root};
 use xgwx::XgwxDocument;
 use xgwx_mcp::operation_types::{SfcEntity, SfcRow, SfcVariable};
 use xgwx_mcp::operations::{OPERATIONS, apply_operation, describe_operation, list_operations};
 
 fn fixture(path: &str) -> XgwxDocument {
-    XgwxDocument::from_path(library_root().join("fixtures").join(path)).unwrap()
+    XgwxDocument::from_path(fixture_root().join("fixtures").join(path)).unwrap()
 }
 
 fn public_mutators(source: &str) -> BTreeSet<String> {
