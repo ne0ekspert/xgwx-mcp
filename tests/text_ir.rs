@@ -39,6 +39,431 @@ fn export_fixture_inventory() {
         assert!(ir.lower_patch("").unwrap().is_empty());
     }
 }
+// Synthetic native payloads derived from public fixtures, never user project data.
+fn with_iec_field(
+    mut doc: XgwxDocument,
+    offset: usize,
+    end: usize,
+    text: &str,
+    kind: u8,
+) -> XgwxDocument {
+    use base64::Engine;
+    use std::io::Write;
+    let program = doc.program().ladder_program(0).unwrap().unwrap();
+    let mut data = program.data.clone();
+    let units = text.encode_utf16().collect::<Vec<_>>();
+    let mut field = vec![0xff, 0xfe, 0xff, u8::try_from(units.len()).unwrap()];
+    field.extend(units.iter().flat_map(|unit| unit.to_le_bytes()));
+    if kind != 0 {
+        data[offset + 1] = kind;
+        let flags = match kind {
+            0x3f => [0, 0, 0x20, 0, 0, 0],
+            0x0e => [1, 0, 0x20, 0, 0, 0],
+            0x46 => [0; 6],
+            _ => panic!("unsupported synthetic kind"),
+        };
+        data[offset + 9..offset + 15].copy_from_slice(&flags);
+        if kind == 0x3f {
+            field.extend([0; 8]);
+        }
+    }
+    data.splice(offset + 15..end, field);
+    let encoded = if program.compressed {
+        let mut encoder = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::best());
+        encoder.write_all(&data).unwrap();
+        encoder.finish().unwrap()
+    } else {
+        data
+    };
+    let parsed = roxmltree::Document::parse(doc.container().xml()).unwrap();
+    let node = parsed
+        .descendants()
+        .find(|n| n.has_tag_name("Program"))
+        .unwrap()
+        .descendants()
+        .find(|n| n.has_tag_name("ProgramData"))
+        .unwrap();
+    let range = node.children().find(|n| n.is_text()).unwrap().range();
+    let mut xml = doc.container().xml().to_owned();
+    xml.replace_range(
+        range,
+        &base64::engine::general_purpose::STANDARD.encode(encoded),
+    );
+    doc.container_mut().replace_xml(xml).unwrap();
+    XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap()
+}
+
+#[test]
+fn iec_unicode_and_empty_operands_and_comments_are_semantic_but_readonly() {
+    for (value, comment) in [
+        ("한글접점", false),
+        ("", false),
+        ("한글 주석\n두 번째 줄", true),
+        ("", true),
+    ] {
+        let doc = fixture("ladder-wire-delete/iec-horizontal-native.xgwx");
+        let p = doc.program().ladder_program(0).unwrap().unwrap();
+        let r = p
+            .iec_record_frames()
+            .unwrap()
+            .into_iter()
+            .find(|r| {
+                matches!(r.kind, xgwx::IecRecordKind::Contact(_)) && p.data[r.offset + 5] == 1
+            })
+            .unwrap();
+        let doc = with_iec_field(doc, r.offset, r.end, value, if comment { 0x3f } else { 0 });
+        let before = doc.to_bytes().unwrap();
+        let ir = Projection::export(&doc, "revision", 0).unwrap();
+        let id = format!("@p0.e{}", r.offset);
+        let line = ir
+            .text
+            .lines()
+            .find(|line| line.split_whitespace().nth(1) == Some(id.as_str()))
+            .unwrap();
+        assert!(
+            line.trim_start()
+                .starts_with(if comment { "annotation " } else { "contact " }),
+            "{line}"
+        );
+        assert!(
+            line.contains(&serde_json::to_string(value).unwrap()),
+            "{line}"
+        );
+        assert!(line.contains("decode \"decoded\""));
+        assert!(line.contains("reason \"writer_string_unavailable\""));
+        assert!(line.ends_with(" readonly"));
+        assert!(ir.lower_patch("").unwrap().is_empty());
+        for new in [
+            line.replace("readonly", "editable"),
+            line.replace("decoded", "unavailable"),
+            line.replace(&serde_json::to_string(value).unwrap(), "\"Changed\""),
+        ] {
+            assert!(
+                ir.lower_patch(&replace_patch(&ir.text, line, &new))
+                    .is_err()
+            );
+        }
+        assert_eq!(doc.to_bytes().unwrap(), before);
+        // A separate supported edit must preserve the readonly native field.
+        if !comment {
+            let other = ir
+                .text
+                .lines()
+                .find(|l| {
+                    (l.trim_start().starts_with("contact ") || l.trim_start().starts_with("coil "))
+                        && !l.ends_with("readonly")
+                })
+                .unwrap();
+            let patch = replace_patch(
+                &ir.text,
+                other,
+                &other.replace(" NO ", " NC ").replace(" OUT ", " INVERSE "),
+            );
+            let mut edited = doc.clone();
+            for op in ir.lower_patch(&patch).unwrap() {
+                xgwx_mcp::operations::apply_operation(&mut edited, &op.name, op.args).unwrap();
+            }
+            let edited = XgwxDocument::parse(&edited.to_verified_bytes().unwrap()).unwrap();
+            let exported = Projection::export(&edited, "revision", 0).unwrap();
+            assert!(exported.text.lines().any(|l| l == line));
+        }
+    }
+}
+
+#[test]
+fn iec_unicode_function_arguments_keep_pin_binding_without_enabling_edits() {
+    let doc = fixture("function-output-wires/base.xgwx");
+    let p = doc.program().ladder_program(0).unwrap().unwrap();
+    let link = p
+        .iec_function_operand_links()
+        .unwrap()
+        .into_iter()
+        .find(|l| !l.is_output)
+        .unwrap();
+    let r = p
+        .iec_record_frames()
+        .unwrap()
+        .into_iter()
+        .find(|r| r.offset == link.record_offset)
+        .unwrap();
+    let doc = with_iec_field(doc, r.offset, r.end, "한글입력", 0);
+    let ir = Projection::export(&doc, "revision", 0).unwrap();
+    let id = format!("@p0.e{}", r.offset);
+    let line = ir
+        .text
+        .lines()
+        .find(|l| l.split_whitespace().nth(1) == Some(id.as_str()))
+        .unwrap();
+    assert!(line.trim_start().starts_with("argument "), "{line}");
+    assert!(line.contains(&format!(
+        "target \"@p0.f{}\" pin {}",
+        link.target_record_offset, link.ordinal
+    )));
+    assert!(line.contains("value \"한글입력\" decode \"decoded\""));
+    assert!(line.ends_with(" readonly"));
+    assert!(ir.lower_patch("").unwrap().is_empty());
+    assert!(
+        ir.lower_patch(&replace_patch(
+            &ir.text,
+            line,
+            &line.replace("한글입력", "Changed")
+        ))
+        .is_err()
+    );
+}
+
+#[test]
+fn iec_readonly_coil_and_unbound_argument_expose_text_and_freeze_metadata() {
+    for kind in [0x0e, 0x46] {
+        let doc = fixture("ladder-wire-delete/iec-horizontal-native.xgwx");
+        let p = doc.program().ladder_program(0).unwrap().unwrap();
+        let r = p
+            .iec_record_frames()
+            .unwrap()
+            .into_iter()
+            .find(|r| matches!(r.kind, xgwx::IecRecordKind::Contact(_)))
+            .unwrap();
+        let doc = with_iec_field(doc, r.offset, r.end, "한글값", kind);
+        let ir = Projection::export(&doc, "revision", 0).unwrap();
+        let id = format!("@p0.e{}", r.offset);
+        let line = ir
+            .text
+            .lines()
+            .find(|l| l.split_whitespace().nth(1) == Some(id.as_str()))
+            .unwrap();
+        if kind == 0x0e {
+            assert!(line.trim_start().starts_with("coil "));
+            assert!(line.contains(" OUT \"한글값\""));
+        } else {
+            assert!(line.contains("kind \"FunctionOperand\" value \"한글값\""));
+            assert!(line.contains("reason \"function_binding_unavailable\""));
+            assert!(!line.contains("target"));
+        }
+        assert!(line.contains("decode \"decoded\""));
+        assert!(line.ends_with(" readonly"));
+        assert!(ir.lower_patch("").unwrap().is_empty());
+        assert!(
+            ir.lower_patch(&replace_patch(
+                &ir.text,
+                line,
+                &line.replace("한글값", "Changed")
+            ))
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn iec_call_pins_and_bindings_are_explicit_and_readonly() {
+    let doc = fixture("function-output-wires/base.xgwx");
+    let p = doc.program().ladder_program(0).unwrap().unwrap();
+    let functions = p.iec_function_blocks().unwrap();
+    let refs = p.iec_function_references().unwrap();
+    let ir = Projection::export(&doc, "revision", 0).unwrap();
+    assert_eq!(
+        ir.text
+            .lines()
+            .filter(|l| l.trim_start().starts_with("call "))
+            .count(),
+        functions.len()
+    );
+    assert_eq!(
+        ir.text
+            .lines()
+            .filter(|l| l.trim_start().starts_with("pin "))
+            .count(),
+        functions.iter().map(|f| f.pins.len() + 2).sum::<usize>()
+    );
+    assert_eq!(
+        ir.text
+            .lines()
+            .filter(|l| l.trim_start().starts_with("binding "))
+            .count(),
+        refs.len()
+    );
+    for r in refs {
+        let line = ir
+            .text
+            .lines()
+            .find(|l| l.starts_with(&format!("  binding @p0.b{} ", r.record_offset)))
+            .unwrap();
+        assert!(line.contains("status \"resolved\""), "{line}");
+        assert!(line.contains(&format!("reference \"@p0.e{}\"", r.record_offset)));
+        assert!(line.contains(&format!("function \"@p0.f{}\"", r.target_record_offset)));
+    }
+    for prefix in ["call ", "pin ", "binding "] {
+        let line = ir
+            .text
+            .lines()
+            .find(|l| l.trim_start().starts_with(prefix))
+            .unwrap();
+        assert!(line.ends_with(" readonly"));
+        assert!(
+            ir.lower_patch(&replace_patch(
+                &ir.text,
+                line,
+                &line.replace("readonly", "editable")
+            ))
+            .is_err()
+        );
+    }
+    assert!(ir.lower_patch("").unwrap().is_empty());
+}
+
+#[test]
+fn operand_metadata_is_frozen_and_recomputed_after_supported_edits() {
+    let doc = fixture("elements.xgwx");
+    let ir = Projection::export(&doc, "revision", 0).unwrap();
+    let line = ir
+        .text
+        .lines()
+        .find(|l| l.trim_start().starts_with("contact "))
+        .unwrap();
+    let owner = line.split_whitespace().nth(1).unwrap();
+    let metadata = ir
+        .text
+        .lines()
+        .find(|l| l.starts_with(&format!("  operand {owner}.operand0 ")))
+        .unwrap();
+    assert!(metadata.ends_with(" readonly"));
+    for changed in [
+        metadata.replace("readonly", "editable"),
+        metadata.replace("category", "altered_category"),
+    ] {
+        assert!(
+            ir.lower_patch(&replace_patch(&ir.text, metadata, &changed))
+                .is_err()
+        );
+    }
+    let program = doc.program().ladder_program(0).unwrap().unwrap();
+    let cell = program
+        .structure
+        .rungs
+        .iter()
+        .flat_map(|r| &r.cells)
+        .find(|c| format!("@p0.e{}", c.offset) == owner)
+        .unwrap();
+    let old = cell.operands.first().unwrap_or(&cell.value);
+    let changed = line.replace(&serde_json::to_string(old).unwrap(), "\"M00999\"");
+    let mut doc = doc;
+    for op in ir
+        .lower_patch(&replace_patch(&ir.text, line, &changed))
+        .unwrap()
+    {
+        xgwx_mcp::operations::apply_operation(&mut doc, &op.name, op.args).unwrap();
+    }
+    let doc = XgwxDocument::parse(&doc.to_verified_bytes().unwrap()).unwrap();
+    let fresh = Projection::export(&doc, "revision", 0).unwrap();
+    assert!(
+        fresh
+            .text
+            .lines()
+            .any(|l| l.trim_start().starts_with("operand ") && l.contains("text \"M00999\""))
+    );
+}
+
+#[test]
+fn native_connection_endpoints_and_provenance_resolve_to_exported_ids() {
+    for fixture_name in [
+        "function-output-wires/base.xgwx",
+        "ladder-wire-delete/iec-horizontal-native.xgwx",
+    ] {
+        let doc = fixture(fixture_name);
+        let p = doc.program().ladder_program(0).unwrap().unwrap();
+        let graph = p.iec_circuit_layout().unwrap();
+        let ir = Projection::export(&doc, "revision", 0).unwrap();
+        let ids = ir
+            .text
+            .lines()
+            .filter_map(|l| l.split_whitespace().nth(1))
+            .filter(|id| id.starts_with('@'))
+            .collect::<std::collections::BTreeSet<_>>();
+        let edges = ir
+            .text
+            .lines()
+            .filter(|l| l.trim_start().starts_with("edge "))
+            .collect::<Vec<_>>();
+        assert_eq!(edges.len(), graph.edges.len());
+        for line in edges {
+            let t = line
+                .split_whitespace()
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            for field in [
+                "connection",
+                "from",
+                "to",
+                "source",
+                "from_terminal",
+                "to_terminal",
+            ] {
+                let value = &t[t.iter().position(|v| v == field).unwrap() + 1];
+                if value != "none" {
+                    let id = serde_json::from_str::<String>(value).unwrap();
+                    assert!(ids.contains(id.as_str()), "dangling {field}: {line}");
+                }
+            }
+        }
+        let junctions = ir
+            .text
+            .lines()
+            .filter(|l| l.trim_start().starts_with("pin_junction "))
+            .collect::<Vec<_>>();
+        assert_eq!(junctions.len(), graph.function_bindings.len());
+        for line in junctions {
+            let t = line
+                .split_whitespace()
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            for field in ["binding", "pin", "junction"] {
+                let value = &t[t.iter().position(|v| v == field).unwrap() + 1];
+                assert_ne!(value, "none");
+                let id = serde_json::from_str::<String>(value).unwrap();
+                assert!(ids.contains(id.as_str()), "{line}");
+            }
+        }
+        for prefix in ["edge ", "junction ", "terminal "] {
+            let Some(line) = ir.text.lines().find(|l| l.trim_start().starts_with(prefix)) else {
+                assert_eq!(prefix, "terminal ");
+                continue;
+            };
+            assert!(
+                ir.lower_patch(&replace_patch(
+                    &ir.text,
+                    line,
+                    &line.replace("readonly", "editable")
+                ))
+                .is_err()
+            );
+        }
+        assert!(ir.lower_patch("").unwrap().is_empty());
+    }
+}
+
+#[test]
+fn context_metadata_is_frozen_and_does_not_claim_runtime_order() {
+    let doc = fixture("empty-projects/new-xgi.xgwx");
+    let ir = Projection::export(&doc, "revision", 0).unwrap();
+    assert!(ir.text.contains("language \"LD\""));
+    assert!(ir.text.contains("execution_order \"not_decoded\""));
+    for prefix in ["context ", "cpu ", "task ", "program_context "] {
+        let line = ir
+            .text
+            .lines()
+            .find(|l| l.trim_start().starts_with(prefix))
+            .unwrap();
+        assert!(line.ends_with(" readonly"));
+        assert!(
+            ir.lower_patch(&replace_patch(
+                &ir.text,
+                line,
+                &line.replace("readonly", "editable")
+            ))
+            .is_err()
+        );
+    }
+}
+
 #[test]
 fn strict_unified_diff_checks_both_coordinates_and_counts() {
     let text = "a\nb\nc\n";

@@ -166,6 +166,220 @@ fn iec_kind(code: u8) -> Option<(&'static str, &'static str)> {
     })
 }
 
+// Presentation-only text from a library-validated IEC frame. Do not add these
+// fields to writer sources: the writer-facing string list has narrower guards.
+fn framed_iec_text(
+    program: &xgwx::LadderProgramData,
+    record: xgwx::IecRecordFrame,
+) -> Option<String> {
+    if !matches!(
+        record.kind,
+        IecRecordKind::Contact(_)
+            | IecRecordKind::Coil(_)
+            | IecRecordKind::Comment
+            | IecRecordKind::FunctionOperand
+    ) {
+        return None;
+    }
+    let bytes = program.data.get(record.offset..record.end)?;
+    if bytes.get(15..18)? != [0xff, 0xfe, 0xff] {
+        return None;
+    }
+    let end = 19usize.checked_add(usize::from(*bytes.get(18)?).checked_mul(2)?)?;
+    let tail = if record.kind == IecRecordKind::Comment {
+        8
+    } else {
+        0
+    };
+    if end.checked_add(tail)? != bytes.len() {
+        return None;
+    }
+    String::from_utf16(
+        &bytes
+            .get(19..end)?
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect::<Vec<_>>(),
+    )
+    .ok()
+}
+
+fn optional_text(value: Option<&str>) -> String {
+    value.map(quote).unwrap_or_else(|| "none".into())
+}
+fn function_pins(
+    index: usize,
+    function: &xgwx::IecFunctionBlock,
+) -> Vec<(String, &xgwx::IecFunctionPin)> {
+    let owner = format!("@p{index}.f{}", function.record_offset);
+    let mut pins = vec![
+        (format!("{owner}.control_in"), &function.control_input),
+        (format!("{owner}.control_out"), &function.control_output),
+    ];
+    pins.extend(
+        function
+            .pins
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (format!("{owner}.data{i}"), p)),
+    );
+    pins
+}
+fn function_metadata(
+    text: &mut String,
+    index: usize,
+    function: &xgwx::IecFunctionBlock,
+    locals: &[xgwx::IecLocalSymbol],
+) {
+    let owner = format!("@p{index}.f{}", function.record_offset);
+    let instance = function.instance.as_ref().map(|s| s.value.as_str());
+    let matches = locals
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.is_instance && Some(s.name.as_str()) == instance)
+        .collect::<Vec<_>>();
+    let symbol = if matches.len() == 1 {
+        Some(matches[0])
+    } else {
+        None
+    };
+    let status = if instance.is_none() {
+        "not_applicable"
+    } else if matches.len() > 1 {
+        "ambiguous"
+    } else if let Some((_, s)) = symbol {
+        match s.type_reference.as_deref() {
+            Some(t) if t == function.name.value => "resolved",
+            Some(_) => "type_mismatch",
+            None => "type_unavailable",
+        }
+    } else {
+        "symbol_unavailable"
+    };
+    let symbol_ref = symbol.map(|(i, _)| format!("@p{index}.s{i}"));
+    text.push_str(&format!("  call {owner}.call target {} class {} instance {} instance_symbol {} instance_type {} instance_status {} state {} readonly\n",
+        quote(&owner), if instance.is_some() { "FUNCTION_BLOCK" } else { "FUNCTION" },
+        optional_text(instance), optional_text(symbol_ref.as_deref()),
+        optional_text(symbol.and_then(|(_,s)|s.type_reference.as_deref())), quote(status),
+        if instance.is_some() { "INSTANCE" } else { "NONE" }));
+    for (id, pin) in function_pins(index, function) {
+        text.push_str(&format!("  pin {id} at(group={},row={},x={}) owner {} name {} role {} direction {} ordinal {} declared_type {} type_expression {} type_mask {} raw_type_flags {} array {} selected_type {} type_status {} readonly\n",
+            function.group_index,pin.row_index,pin.raw_x,quote(&owner),quote(&pin.name.value),
+            if pin.is_control { "CONTROL" } else { "DATA" },
+            if pin.direction==xgwx::IecFunctionPinDirection::Input { "INPUT" } else { "OUTPUT" },
+            pin.reference_ordinal.map(|n|n.to_string()).unwrap_or_else(||"none".into()),
+            optional_text(pin.data_type),optional_text(pin.type_expression.as_ref().map(|s|s.value.as_str())),
+            pin.data_type_mask, pin.raw_type_flags, pin.is_array,
+            optional_text(pin.data_type.filter(|_| pin.data_type_mask.is_power_of_two())),
+            quote(if pin.data_type.is_some() && pin.data_type_mask.is_power_of_two() { "concrete" } else { "constraint_only" })));
+    }
+}
+
+fn junction_id(index: usize, p: xgwx::IecCircuitPoint) -> String {
+    format!("@p{index}.j{}r{}x{}", p.group_index, p.row_index, p.x)
+}
+fn connection_metadata(
+    index: usize,
+    graph: &xgwx::IecCircuitGraph,
+    functions: &[xgwx::IecFunctionBlock],
+    sources: &BTreeMap<String, Source>,
+) -> String {
+    let mut text = String::new();
+    let points = graph
+        .edges
+        .iter()
+        .flat_map(|e| [e.start, e.end])
+        .chain(graph.function_bindings.iter().map(|b| b.pin_point))
+        .collect::<BTreeSet<_>>();
+    for p in points {
+        let id = junction_id(index, p);
+        text.push_str(&format!(
+            "  junction {id} at(group={},row={},x={}) rail {} open {} readonly\n",
+            p.group_index,
+            p.row_index,
+            p.x,
+            if p.x == 0 {
+                "LEFT"
+            } else if p.x == 96 {
+                "RIGHT"
+            } else {
+                "NONE"
+            },
+            graph.open_branch_endpoints.contains(&p)
+        ));
+    }
+    for (i, e) in graph.edges.iter().enumerate() {
+        let function = matches!(e.kind, xgwx::IecCircuitEdgeKind::FunctionEnable);
+        let element = matches!(
+            e.kind,
+            xgwx::IecCircuitEdgeKind::Contact(_) | xgwx::IecCircuitEdgeKind::Coil(_)
+        );
+        let owner = if function {
+            format!("@p{index}.f{}", e.record_offset)
+        } else if element {
+            format!("@p{index}.e{}", e.record_offset)
+        } else if matches!(e.kind, xgwx::IecCircuitEdgeKind::VerticalBranch) {
+            format!("@p{index}.v{}", e.record_offset)
+        } else {
+            format!("@p{index}.h{}", e.record_offset)
+        };
+        let from_terminal = if function {
+            Some(format!("{owner}.control_in"))
+        } else if element {
+            Some(format!("{owner}.input"))
+        } else {
+            None
+        };
+        let to_terminal = if function {
+            Some(format!("{owner}.control_out"))
+        } else if element {
+            Some(format!("{owner}.output"))
+        } else {
+            None
+        };
+        if element {
+            for (id, role, point) in [
+                (from_terminal.as_ref().unwrap(), "INPUT", e.start),
+                (to_terminal.as_ref().unwrap(), "OUTPUT", e.end),
+            ] {
+                text.push_str(&format!(
+                    "  terminal {id} owner {} role {role} junction {} readonly\n",
+                    quote(&owner),
+                    quote(&junction_id(index, point))
+                ));
+            }
+        }
+        // Long/short wires use the physical export's offset identity. A branch
+        // may comprise multiple segments; preserve explicit raw provenance when
+        // no corresponding physical wire identity is available.
+        let owner_available = sources.contains_key(&owner) || element || function;
+        text.push_str(&format!("  edge @p{index}.w{i}.edge connection {} from {} to {} source {} source_offset {} paired_offset {} from_terminal {} to_terminal {} source_status {} readonly\n",
+            quote(&format!("@p{index}.w{i}")),quote(&junction_id(index,e.start)),quote(&junction_id(index,e.end)),
+            optional_text(owner_available.then_some(owner.as_str())),e.record_offset,
+            e.paired_record_offset.map(|o|o.to_string()).unwrap_or_else(||"none".into()),
+            optional_text(from_terminal.as_deref()),optional_text(to_terminal.as_deref()),
+            quote(if owner_available {"resolved"} else {"record_only"})));
+    }
+    for b in &graph.function_bindings {
+        let pin = functions
+            .iter()
+            .find(|f| f.record_offset == b.block_record_offset)
+            .and_then(|f| {
+                function_pins(index, f).into_iter().find(|(_, p)| {
+                    p.reference_ordinal == Some(b.ordinal) && p.direction == b.direction
+                })
+            });
+        text.push_str(&format!(
+            "  pin_junction @p{index}.b{}.junction binding {} pin {} junction {} readonly\n",
+            b.reference_record_offset,
+            quote(&format!("@p{index}.b{}", b.reference_record_offset)),
+            optional_text(pin.as_ref().map(|(id, _)| id.as_str())),
+            quote(&junction_id(index, b.pin_point))
+        ));
+    }
+    text
+}
+
 pub struct Projection {
     pub text: String,
     pub dialect: &'static str,
@@ -202,6 +416,10 @@ impl Projection {
                 "readonly editable {} reason {}\n",
                 program.editable,
                 quote(program.reason.as_deref().unwrap_or(""))
+            ));
+            text.push_str(&crate::context_ir::export(
+                doc,
+                Some((index, &program.language)),
             ));
             text.push_str("source {\n");
             if let Some(source) = &program.source {
@@ -274,6 +492,7 @@ impl Projection {
             quote(summary.name.as_deref().unwrap_or("")),
             quote(summary.object_id.as_deref().unwrap_or(""))
         ));
+        text.push_str(&crate::context_ir::export(doc, Some((index, "LD"))));
         let locals = doc
             .variable()
             .iec_local_symbols()
@@ -290,6 +509,10 @@ impl Projection {
                 quote(symbol.data_type.as_deref().unwrap_or("")),
                 quote(symbol.description.as_deref().unwrap_or(""))
             ));
+            if symbol.is_instance {
+                text.push_str(&format!("  symbol_instance {id}.instance symbol {} type_reference {} state INSTANCE readonly\n",
+                    quote(&id), optional_text(symbol.type_reference.as_deref())));
+            }
             sources.insert(id, Source::Local { index: i });
         }
         if iec {
@@ -359,8 +582,17 @@ impl Projection {
             let records = program
                 .iec_record_frames()
                 .ok_or_else(|| unsupported("IEC record layout is not recognized"))?;
-            let functions = program.iec_function_blocks().unwrap_or_default();
-            let links = program.iec_function_operand_links().unwrap_or_default();
+            let decoded_functions = program.iec_function_blocks();
+            let decoded_references = program.iec_function_references();
+            let decoded_links = program.iec_function_operand_links();
+            let links_available = decoded_links.is_some();
+            text.push_str(&format!("  decode_status @p{index}.functions function_bodies {} pin_references {} argument_bindings {} readonly\n",
+                quote(if decoded_functions.is_some() { "decoded" } else { "unavailable" }),
+                quote(if decoded_references.is_some() { "decoded" } else { "unavailable" }),
+                quote(if links_available { "decoded" } else { "unavailable" })));
+            let functions = decoded_functions.unwrap_or_default();
+            let references = decoded_references.unwrap_or_default();
+            let links = decoded_links.unwrap_or_default();
             for record in records {
                 if physical_offsets.contains(&record.offset) {
                     continue;
@@ -391,6 +623,7 @@ impl Projection {
                             &program.data[record.offset..record.end]
                         ))
                     ));
+                    function_metadata(&mut text, index, function, &locals);
                     sources.insert(
                         id,
                         Source::Function {
@@ -450,7 +683,7 @@ impl Projection {
                         "IEC"
                     };
                     text.push_str(&format!(
-                        "  annotation {id} {} {kind} {} hash {} readonly\n",
+                        "  annotation {id} {} {kind} {} decode \"decoded\" reason \"writer_layout_unsupported\" hash {} readonly\n",
                         position.render(),
                         quote(value),
                         quote(&crate::storage::revision(
@@ -458,17 +691,85 @@ impl Projection {
                         ))
                     ));
                 } else {
-                    let raw = &program.data[record.offset..record.end];
-                    text.push_str(&format!(
-                        "  record {id} {} kind {} hash {} readonly\n",
-                        position.render(),
-                        quote(&format!("{:?}", record.kind)),
-                        quote(&crate::storage::revision(raw))
+                    let hash = quote(&crate::storage::revision(
+                        &program.data[record.offset..record.end],
                     ));
+                    let decoded = framed_iec_text(&program, record);
+                    if let (Some((family, kind)), Some(value)) = (element, decoded.as_deref()) {
+                        text.push_str(&format!(
+                            "  {family} {id} {} {kind} {} decode \"decoded\" reason \"writer_string_unavailable\" hash {hash} readonly\n",
+                            position.render(), quote(value)));
+                    } else if let (IecRecordKind::Comment, Some(value)) =
+                        (record.kind, decoded.as_deref())
+                    {
+                        let kind = if program.data[record.offset + 1] == 0x40 {
+                            "OUTPUT"
+                        } else {
+                            "IEC"
+                        };
+                        text.push_str(&format!(
+                            "  annotation {id} {} {kind} {} decode \"decoded\" reason \"writer_string_unavailable\" hash {hash} readonly\n",
+                            position.render(), quote(value)));
+                    } else if let (IecRecordKind::FunctionOperand, Some(value)) =
+                        (record.kind, decoded.as_deref())
+                    {
+                        if let Some(link) = links.iter().find(|l| l.record_offset == record.offset)
+                        {
+                            text.push_str(&format!("  argument {id} {} target {} pin {} pin_row {} pin_x {} direction {} type_mask {} array {} value {} decode \"decoded\" reason \"writer_string_unavailable\" hash {hash} readonly\n", position.render(), quote(&format!("@p{index}.f{}",link.target_record_offset)), link.ordinal, link.pin_row_index, link.pin_raw_x, if link.is_output {"OUTPUT"} else {"INPUT"}, link.data_type_mask, link.is_array, quote(value)));
+                        } else {
+                            text.push_str(&format!("  record {id} {} kind \"FunctionOperand\" value {} decode \"decoded\" reason \"function_binding_unavailable\" hash {hash} readonly\n", position.render(), quote(value)));
+                        }
+                    } else {
+                        let (decode, reason) = match record.kind {
+                            IecRecordKind::Contact(_)
+                            | IecRecordKind::Coil(_)
+                            | IecRecordKind::Comment
+                            | IecRecordKind::FunctionOperand => {
+                                ("unavailable", "record_text_unavailable")
+                            }
+                            IecRecordKind::FunctionBlock => {
+                                ("unavailable", "function_decode_unavailable")
+                            }
+                            _ => ("not_applicable", "structural_record"),
+                        };
+                        text.push_str(&format!(
+                            "  record {id} {} kind {} decode {} reason {} hash {hash} readonly\n",
+                            position.render(),
+                            quote(&format!("{:?}", record.kind)),
+                            quote(decode),
+                            quote(reason)
+                        ));
+                    }
                 }
+            }
+            for reference in references {
+                let function = functions
+                    .iter()
+                    .find(|f| f.record_offset == reference.target_record_offset);
+                let pin = function.and_then(|f| {
+                    function_pins(index, f).into_iter().find(|(_, p)| {
+                        p.reference_ordinal == Some(reference.ordinal)
+                            && (p.direction == xgwx::IecFunctionPinDirection::Output)
+                                == reference.is_output
+                    })
+                });
+                let argument = links
+                    .iter()
+                    .find(|l| {
+                        l.target_record_offset == reference.target_record_offset
+                            && l.ordinal == reference.ordinal
+                    })
+                    .map(|l| format!("@p{index}.e{}", l.record_offset));
+                let source = format!("@p{index}.e{}", reference.record_offset);
+                text.push_str(&format!("  binding @p{index}.b{} reference {} function {} pin {} argument {} argument_status {} status {} readonly\n",
+                    reference.record_offset,quote(&source),quote(&format!("@p{index}.f{}",reference.target_record_offset)),
+                    optional_text(pin.as_ref().map(|(id,_)|id.as_str())), optional_text(argument.as_deref()),
+                    quote(if argument.is_some() { "resolved" } else if links_available { "no_expression" } else { "binding_unavailable" }),
+                    quote(if pin.is_some() { "resolved" } else { "pin_unavailable" })));
             }
             // Actual connectivity is exported, including incomplete native circuits.
             if let Some(graph) = program.iec_circuit_layout() {
+                text.push_str(&connection_metadata(index, &graph, &functions, &sources));
                 for (i, edge) in graph.edges.iter().enumerate() {
                     let point = |p: xgwx::IecCircuitPoint| {
                         Position::Iec {
@@ -693,6 +994,76 @@ impl Projection {
                 sources.insert(format!("@p{index}.v{i}"), Source::Wire { offset: 0 });
             }
         }
+        let operand_context = crate::operand_ir::Context::new(
+            index,
+            iec,
+            &globals,
+            &locals,
+            &program.iec_function_blocks().unwrap_or_default(),
+        );
+        let mut operand_metadata = String::new();
+        for line in text.lines() {
+            let tokens = lex(line)?;
+            let Some(keyword) = tokens.first().map(String::as_str) else {
+                continue;
+            };
+            if !matches!(
+                keyword,
+                "contact" | "coil" | "argument" | "instruction" | "record"
+            ) {
+                continue;
+            }
+            let (_, consumed) = position(&tokens[2..])?;
+            let fields = &tokens[2 + consumed..];
+            let values = match keyword {
+                "contact" | "coil" => vec![string(&fields[1])?],
+                "argument" => fields
+                    .iter()
+                    .position(|v| v == "value")
+                    .map(|i| string(&fields[i + 1]))
+                    .transpose()?
+                    .into_iter()
+                    .collect(),
+                "record"
+                    if fields.first().map(String::as_str) == Some("kind")
+                        && string(&fields[1])? == "FunctionOperand" =>
+                {
+                    fields
+                        .iter()
+                        .position(|v| v == "value")
+                        .map(|i| string(&fields[i + 1]))
+                        .transpose()?
+                        .into_iter()
+                        .collect()
+                }
+                "instruction" => fields
+                    .iter()
+                    .position(|v| v == "operands")
+                    .map(|i| {
+                        fields[i + 1..]
+                            .iter()
+                            .map(|v| string(v))
+                            .collect::<Result<Vec<_>, _>>()
+                    })
+                    .transpose()?
+                    .unwrap_or_default(),
+                _ => vec![],
+            };
+            for (ordinal, value) in values.iter().enumerate() {
+                if !iec
+                    && keyword == "contact"
+                    && value.is_empty()
+                    && matches!(
+                        fields.first().map(String::as_str),
+                        Some("INVERSE" | "RISING" | "FALLING")
+                    )
+                {
+                    continue; // Native operandless XGK logic markers have no reference to resolve.
+                }
+                operand_metadata.push_str(&operand_context.render(&tokens[1], ordinal, value));
+            }
+        }
+        text.push_str(&operand_metadata);
         text.push_str("}\n");
         parse(&text)?;
         Ok(Self {
@@ -1579,6 +1950,10 @@ fn parse(text: &str) -> Result<Parsed, StoreError> {
             parsed.frozen.push(t);
             continue;
         }
+        if t.last().map(String::as_str) == Some("readonly") {
+            parsed.frozen.push(t);
+            continue;
+        }
         if matches!(t[0].as_str(), "contact" | "coil" | "comment") {
             let id = t
                 .get(1)
@@ -1885,4 +2260,102 @@ pub fn apply_unified_patch(original: &str, patch: &str) -> Result<String, StoreE
     }
     out.extend(lines[cursor..].iter().map(|s| s.to_string()));
     Ok(out.join("\n") + "\n")
+}
+
+#[cfg(test)]
+mod function_metadata_tests {
+    use super::*;
+    fn string(value: &str) -> xgwx::LadderString {
+        xgwx::LadderString {
+            offset: 0,
+            end_offset: 0,
+            value: value.into(),
+        }
+    }
+    fn symbol(name: &str, kind: Option<&str>) -> xgwx::IecLocalSymbol {
+        xgwx::IecLocalSymbol {
+            record_offset: 0,
+            name: name.into(),
+            address: None,
+            type_reference: kind.map(str::to_owned),
+            data_type_code: 0,
+            data_type: None,
+            storage_class: "A".into(),
+            allocation_number: Some(0),
+            allocation_width: Some(8),
+            description: None,
+            is_instance: true,
+        }
+    }
+    fn function() -> xgwx::IecFunctionBlock {
+        let pin = xgwx::IecFunctionPin {
+            name: string("IN"),
+            type_expression: None,
+            raw_type_flags: 1,
+            data_type_mask: 1,
+            data_type: Some("BOOL"),
+            is_array: false,
+            direction: xgwx::IecFunctionPinDirection::Input,
+            is_control: true,
+            reference_ordinal: None,
+            raw_x: 10,
+            row_index: 0,
+        };
+        let mut output = pin.clone();
+        output.name = string("Q");
+        output.raw_x = 13;
+        output.direction = xgwx::IecFunctionPinDirection::Output;
+        xgwx::IecFunctionBlock {
+            group_index: 0,
+            row_index: 0,
+            record_offset: 100,
+            record_end: 200,
+            raw_x: 10,
+            opcode_family: 0x21,
+            opcode: 0,
+            pin_count: 1,
+            name: string("TON"),
+            instance: Some(string("타이머")),
+            control_input: pin,
+            control_output: output,
+            pins: vec![],
+            field_strings: vec![],
+        }
+    }
+    #[test]
+    fn instance_resolution_is_exact_unique_and_type_checked() {
+        let f = function();
+        for (symbols, status) in [
+            (vec![symbol("타이머", Some("TON"))], "resolved"),
+            (vec![], "symbol_unavailable"),
+            (vec![symbol("타이머", Some("TOF"))], "type_mismatch"),
+            (vec![symbol("타이머", None)], "type_unavailable"),
+            (
+                vec![symbol("타이머", Some("TON")), symbol("타이머", Some("TON"))],
+                "ambiguous",
+            ),
+        ] {
+            let mut text = String::new();
+            function_metadata(&mut text, 0, &f, &symbols);
+            assert!(text.contains("class FUNCTION_BLOCK instance \"타이머\""));
+            assert!(text.contains(&format!("instance_status {}", quote(status))));
+            if status == "resolved" {
+                assert!(text.contains("instance_symbol \"@p0.s0\" instance_type \"TON\""));
+            }
+            if status == "ambiguous" {
+                assert!(text.contains("instance_symbol none"));
+            }
+            assert!(text.contains("selected_type \"BOOL\" type_status \"concrete\""));
+        }
+        let mut f = f;
+        f.instance = None;
+        let mut text = String::new();
+        function_metadata(&mut text, 0, &f, &[]);
+        assert!(text.contains("class FUNCTION instance none instance_symbol none instance_type none instance_status \"not_applicable\" state NONE"));
+        f.control_input.data_type_mask = 0xfffff;
+        f.control_input.data_type = Some("ANY");
+        text.clear();
+        function_metadata(&mut text, 0, &f, &[]);
+        assert!(text.contains("selected_type none type_status \"constraint_only\""));
+    }
 }

@@ -79,6 +79,53 @@ IEC annotation records that the comment writer does not support are displayed as
 
 IEC contact kinds: `NO`, `NC`, `RISING`, `FALLING`, `NEGATED_RISING`, `NEGATED_FALLING`. Coil kinds match XGK. Operands retain the library's existing BOOL/device-expression and writable-output preconditions. Local symbol descriptions are editable; declaration names, addresses, and types are read-only in this version. The source mapping resolves record identities to the actual string offsets required by the IEC writers; agents do not calculate binary offsets.
 
+## Readonly semantic statements
+
+IEC text omitted by the writer-facing string list (including Unicode and empty
+fields) is decoded within library-validated record boundaries and exposed as
+readonly contact/coil, argument or annotation statements. `decode "decoded"`
+identifies known text; it does not grant edit access. Preserve the whole line,
+including `reason`, source hash and `readonly`. An unbound FunctionOperand
+record exposes its known `value` with `function_binding_unavailable` instead of
+inventing a pin target. Other fallback records distinguish `decode "unavailable"`
+from structural `decode "not_applicable"` and retain their kind and hash.
+
+## Function call and pin metadata
+
+Readonly `call`, `symbol_instance`, `pin`, `binding` and `decode_status` statements
+expose instance types, named control/data pins and explicit reference-to-pin
+links. State reflects the encoded instance marker, not runtime behavior. Broad
+pin masks are constraints; selected_type stays none unless a known single type
+bit is encoded. Instance lookup is exact and unique within the local table, with
+explicit mismatch/unavailable states. Argument links distinguish resolved
+records, no expression and decoder failure. Keep all metadata intact during
+supported function-name/argument-value edits and re-export after saving.
+
+## Typed operand metadata
+
+Readonly `operand` statements link source statements and operand indices to
+SYMBOL, DIRECT_ADDRESS, FIELD, SYSTEM_SYMBOL, LITERAL or UNRESOLVED categories.
+Local declarations shadow globals; duplicate names stay ambiguous and direct
+addresses retain all exact spelling candidates. Native instance-pin fields can
+resolve; compound/array expressions remain unresolved. Syntax-only addresses
+and literals are not CPU/type/writability validation, and temporal prefixes
+remain unvalidated. Keep metadata intact during edits and re-export afterward.
+Global table renames do not rewrite program operands. Local rename propagation
+covers captured exact-string uses/instance markers rather than arbitrary member
+or compound expressions. Changing an operand affects only that use.
+
+## Endpoint and project context metadata
+
+Readonly IEC `junction`, `edge`, `terminal` and `pin_junction` statements connect
+native circuit boundaries to element/control-pin IDs and source record/wire
+provenance. Coordinate connection statements remain available. The graph records
+conditional circuit structure, not runtime activation. Decoder failures do not
+produce guessed topology. XGK wires retain their native positional format.
+Readonly CPU/task/program context preserves language, task bindings and raw
+priority/trigger data, while runtime execution order and memory aliases remain
+not_decoded. Keep these statements intact in all patches and re-export after
+native changes.
+
 ## Creating and deleting elements
 
 Add new statements with fresh `@new-<name>` identities. These authoring identities are temporary; after saving, `get_ir` returns new source-backed references. Preserve source identities on retained objects. Multiple elements cannot share a native position.

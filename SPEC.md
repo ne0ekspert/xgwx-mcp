@@ -225,3 +225,77 @@ limit and declaration/reference guards. Reuse normal atomic transaction, revisio
 dry-run and backup behavior. Do not treat source serialization as compilation.
 
 XGK vendor IL inspection uses vendor_il; edit_vendor_il rebuilds the selected native ladder payload, retaining identity/source and straight-line/catalog restrictions. Advertise xgk_il as IL with native LD storage.
+
+## IEC readonly semantic coverage
+
+Decode text only within library-validated IEC record frames, checking the native
+UTF-16 marker, length and exact record boundary (including the comment trailer).
+Do not broaden writer sources. Expose known contact/coil operands, bound function
+arguments and annotation text as readonly semantic statements when the existing
+writer-facing strings omit them. Unbound FunctionOperand records retain known
+values with a binding-unavailable reason. Distinguish text/function decoding
+unavailable from structural records without text; retain kind, identity,
+position and source hash. All readonly statements are frozen during patch
+comparison, even when they share a keyword with an editable statement.
+Test Unicode, empty/multiline text, pin binding, tampering rejection and retained
+native fields across unrelated supported edits. Native acceptance is separate.
+
+## IEC call and pin metadata
+
+Keep the existing editable function/argument grammar and add frozen readonly
+call, symbol_instance, pin, binding and decode_status statements. Classify calls
+using native instance markers. Resolve instance symbols only by a unique exact
+name in the selected local table and expose missing/ambiguous/type mismatch
+states. Retain instance type references even for unused declarations. Export
+every control/data pin with native coordinates, name, direction, ordinal, type
+expression/mask/raw flags and array status. Concrete selected_type requires a
+single known native type bit; broad masks remain constraint_only. Native
+references identify explicit pin targets and optional argument records;
+distinguish absent expressions from unavailable argument-link decoding. Report
+function-body/reference/argument-link decoding independently. Instance presence
+does not establish runtime enable behavior, retention, initialization or purity.
+Test instance resolution/mismatch/ambiguity, pin counts/targets, concrete versus
+constrained types, frozen metadata and existing name/value edits.
+
+## Typed operand metadata
+
+Append frozen operand statements to XGK/IEC ladder exports for exposed element,
+argument and catalog-instruction operands, including readonly semantic fields.
+Retain original text, owner and operand index. Resolve local declaration names
+before globals, report ambiguity, and retain every exact address match without
+alias/range inference. IEC native instance fields require an exact declaration
+and matching decoded function type/pin; unresolved members retain their base
+link and reason. Resolve system symbols only from the library catalog. Classify
+simple address/literal spelling separately from semantic validation; temporal
+prefix payloads remain unvalidated. Additional expressions/literal forms remain
+unresolved. Metadata does not broaden writer support or select concrete numeric
+literal types. Recompute it after edits rather than accepting client-supplied
+links. Document the original document as source of truth and exact-string local
+rename behavior versus table-only global rename and single-use operand edits.
+Test local shadowing/duplicate names, Unicode, address sharing/invalid syntax,
+native fields, catalog system names, literal limits, readonly tampering and
+metadata refresh after a supported operand edit.
+
+Resolved SYMBOL operand metadata shows its declared address immediately after
+text. Unmapped/ambiguous symbols and fields retain address none; do not derive
+field addresses from instance allocation. DIRECT_ADDRESS operands retain their
+exact spelling. Address context is readonly and recomputed on fresh export.
+
+## Logical endpoints and project context
+
+Preserve IEC coordinate connections and append frozen junction/edge/terminal/
+pin_junction statements from the library circuit layout. Retain connection and
+source object references, raw/paired native record offsets, rails and open
+endpoints. Function enable endpoints refer to exported control pins; native
+function bindings identify pin junctions. Missing source objects retain raw
+provenance with record_only status. Do not infer powered nets, unconditional
+conduction, data-flow execution or geometry after decoder failure. XGK endpoint
+normalization remains outside this model.
+
+Include frozen CPU/catalog, native task/trigger/priority/attribute and selected
+program language/task context in property, LD, SFC and standalone ST/IL exports.
+Require unique exact task-name matches. Unknown CPU codes remain visible;
+document indices do not establish runtime execution order. Explicitly leave
+memory aliases and execution order not_decoded. Test endpoint/reference integrity,
+readonly tampering, context across formats, source/program patches and task/CPU
+unknown states. Native runtime acceptance remains separate.

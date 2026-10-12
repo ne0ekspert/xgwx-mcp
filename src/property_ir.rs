@@ -80,6 +80,9 @@ impl Projection {
             json!(revision),
             program_index.map(|i| i.to_string()).unwrap_or("all".into())
         ));
+        for line in crate::context_ir::export(doc, None).lines() {
+            p.line(line);
+        }
         match section {
             "modules" => {
                 for (i, m) in doc.module().summaries().iter().enumerate() {
@@ -225,6 +228,7 @@ impl Projection {
                                 p.field("storage_class", json!(v.storage_class), None);
                                 p.field("allocation_number", json!(v.allocation_number), None);
                                 p.field("allocation_width", json!(v.allocation_width), None);
+                                p.field("type_reference", json!(v.type_reference), None);
                                 p.field("is_instance", json!(v.is_instance), None);
                                 p.line("}");
                             }

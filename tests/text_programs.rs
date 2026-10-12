@@ -210,7 +210,7 @@ async fn stdio_st_and_il_creation_inspection_declarations_and_patch() {
         CallToolRequestParams::new(name.to_owned())
             .with_arguments(args.as_object().unwrap().clone())
     };
-    assert_eq!(client.list_all_tools().await.unwrap().len(), 19);
+    assert_eq!(client.list_all_tools().await.unwrap().len(), 17);
     for name in ["edit_text_program", "edit_text_variable"] {
         let result = client
             .call_tool(call("describe_operation", json!({"name":name})))

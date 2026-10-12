@@ -7,6 +7,8 @@ pub mod server;
 pub mod storage;
 pub mod text_ir;
 
+mod context_ir;
+mod operand_ir;
 mod sfc_ir;
 
 pub mod templates;

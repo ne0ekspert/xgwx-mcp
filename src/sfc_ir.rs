@@ -71,6 +71,7 @@ impl Projection {
             quoted(summary.name.as_deref().unwrap_or("")),
             quoted(summary.object_id.as_deref().unwrap_or(""))
         );
+        text.push_str(&crate::context_ir::export(doc, Some((index, "SFC"))));
         let mut sources = BTreeMap::new();
         if let Some(reason) = &program.variables_error {
             text.push_str(&format!(
