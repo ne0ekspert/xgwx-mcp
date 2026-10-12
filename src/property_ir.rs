@@ -204,7 +204,24 @@ impl Projection {
                                         &["replacement"],
                                     )),
                                 );
-                                p.field("address", json!(v.address), None);
+                                let address_binding = (!v.is_instance
+                                    && matches!(v.data_type_code, 1..=19))
+                                .then(|| {
+                                    Binding::new(
+                                        "update_iec_local_symbol_address",
+                                        json!({"program_index":program,"symbol_index":index,
+                                            "expected_name":v.name,
+                                            "expected_address":v.address.clone().unwrap_or_default()}),
+                                        &["replacement"],
+                                    )
+                                    .structural()
+                                });
+                                let address = if address_binding.is_some() {
+                                    json!(v.address.clone().unwrap_or_default())
+                                } else {
+                                    json!(v.address)
+                                };
+                                p.field("address", address, address_binding);
                                 p.field("storage_class", json!(v.storage_class), None);
                                 p.field("allocation_number", json!(v.allocation_number), None);
                                 p.field("allocation_width", json!(v.allocation_width), None);
@@ -415,7 +432,7 @@ impl Projection {
         }));
         if structural && ops.len() != 1 {
             return Err(invalid(
-                "IEC local rename/type changes must be the sole mutation; re-export afterward",
+                "IEC local rename/type/address changes must be the sole mutation; re-export afterward",
             ));
         }
         Ok(ops)

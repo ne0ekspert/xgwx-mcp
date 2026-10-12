@@ -180,24 +180,6 @@ pub struct RenameProgramRequest {
     #[serde(default)]
     pub dry_run: bool,
 }
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ModuleCommentRequest {
-    pub path: String,
-    pub object_ref: String,
-    pub comment: String,
-    #[serde(default)]
-    pub dry_run: bool,
-}
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ContactOperandRequest {
-    pub path: String,
-    pub object_ref: String,
-    pub operand: String,
-    #[serde(default)]
-    pub dry_run: bool,
-}
 
 fn result(value: Result<Value, StoreError>) -> CallToolResult {
     match value {
@@ -374,58 +356,6 @@ impl XgwxServer {
         .await
     }
     #[tool(
-        description = "Update one installed module's comment using object_ref from list_modules or inspect_file hardware. Physical selection must be unique. Preserves model/options and existing writer guards. Saves with backup; dry_run previews before/after values.",
-        annotations(
-            read_only_hint = false,
-            destructive_hint = false,
-            open_world_hint = false
-        )
-    )]
-    async fn set_module_comment(
-        &self,
-        Parameters(request): Parameters<ModuleCommentRequest>,
-    ) -> CallToolResult {
-        let store = self.store.clone();
-        blocking(move || {
-            crate::common::apply(
-                &store,
-                &request.path,
-                crate::common::Change::SetModuleComment {
-                    object_ref: request.object_ref,
-                    comment: request.comment,
-                },
-                request.dry_run,
-            )
-        })
-        .await
-    }
-    #[tool(
-        description = "Change a single XGK/IEC contact operand using object_ref from search_project. Derives current string offset/expected operand and retains library type/layout guards. Saves with backup; dry_run previews before/after values. Does not rename a symbol or change other uses.",
-        annotations(
-            read_only_hint = false,
-            destructive_hint = false,
-            open_world_hint = false
-        )
-    )]
-    async fn set_contact_operand(
-        &self,
-        Parameters(request): Parameters<ContactOperandRequest>,
-    ) -> CallToolResult {
-        let store = self.store.clone();
-        blocking(move || {
-            crate::common::apply(
-                &store,
-                &request.path,
-                crate::common::Change::SetContactOperand {
-                    object_ref: request.object_ref,
-                    operand: request.operand,
-                },
-                request.dry_run,
-            )
-        })
-        .await
-    }
-    #[tool(
         description = "Prepare 1–128 common changes as one verified dry-run transaction. Each change uses an inspected object_ref. Returns readable target/field/before/after values, validation, exact candidate hash and a session-scoped change_token lasting 30 minutes. Creates no files or sidecars; does not save. Review the result then call commit_change with the token.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
@@ -594,7 +524,7 @@ impl XgwxServer {
             let (path, revision, doc) = store.read(&request.path)?;
             if request.section != "program" {
                 let ir=crate::property_ir::Projection::export(&doc,&revision,&request.section,request.program_index)?;
-                return Ok(json!({"path":path,"revision":revision,"section":request.section,"program_index":request.program_index,"format":"xgwx-properties/1","text":ir.text,"capabilities":["marked_property_updates"],"limitations":"Only properties marked edit can change. Retain object/field identities, order, scalar types and readonly lines. Missing values and structural creation/deletion/replacement are read-only; use apply_edits for those. IEC local rename/type changes must be the sole mutation and require renewed export. Native acceptance remains separate."}));
+                return Ok(json!({"path":path,"revision":revision,"section":request.section,"program_index":request.program_index,"format":"xgwx-properties/1","text":ir.text,"capabilities":["marked_property_updates"],"limitations":"Only properties marked edit can change. Retain object/field identities, order, scalar types and readonly lines. Missing values and structural creation/deletion/replacement are read-only; use apply_edits for those. IEC local rename/type/address changes must be the sole mutation and require renewed export. Editable local addresses use quoted strings; an empty string clears the mapping. Storage and allocation fields are derived and readonly. Native acceptance remains separate."}));
             }
             let program_index=request.program_index.ok_or_else(||StoreError::new("invalid_arguments","program_index is required for section program"))?;
             let ir = crate::text_ir::Projection::export(&doc, &revision, program_index)?;
@@ -616,7 +546,7 @@ impl XgwxServer {
     }
 
     #[tool(
-        description = "Apply an exact unified diff to text from get_ir using the same section/program_index. Property documents support module comments/options, global variable metadata, guarded IEC local names/types/descriptions, network names/module metadata and Cnet/FEnet settings. Structural property objects and readonly fields cannot change. IEC local rename/type changes require one mutation. Compile supported semantic changes into guarded writers and save as one verified transaction with a backup. Supports standalone ST/IL source replacement with exact identity/language/source guards, SFC linear row creation/deletion/reordering and existing row fields, guarded direct entity comments/conditions and declaration descriptions, plus XGK cell and catalog instruction/comparison creation/deletion, instruction mnemonic/operand edits, IEC empty-row element creation, terminal-coil creation, isolated/connected-contact and terminal-coil deletion, physical-wire deletion and vertical-wire creation, contact/coil kind/operand edits, bound IEC function operands and captured arithmetic/comparison names, existing comment text, symbol descriptions, and XGK comment creation/rung comment deletion. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation; re-export afterward. SFC row changes target one chart and must be the only writer operation. Rejects unsupported moves and derived topology edits. Empty patch is a no-op. dry_run performs no disk changes.",
+        description = "Apply an exact unified diff to text from get_ir using the same section/program_index. Property documents support module comments/options, global variable metadata, guarded IEC local names/types/addresses/descriptions, network names/module metadata and Cnet/FEnet settings. Structural property objects and readonly fields cannot change. IEC local rename/type/address changes require one mutation. Compile supported semantic changes into guarded writers and save as one verified transaction with a backup. Supports standalone ST/IL source replacement with exact identity/language/source guards, SFC linear row creation/deletion/reordering and existing row fields, guarded direct entity comments/conditions and declaration descriptions, plus XGK cell and catalog instruction/comparison creation/deletion, instruction mnemonic/operand edits, IEC empty-row element creation, terminal-coil creation, isolated/connected-contact and terminal-coil deletion, physical-wire deletion and vertical-wire creation, contact/coil kind/operand edits, bound IEC function operands and captured arithmetic/comparison names, existing comment text, symbol descriptions, and XGK comment creation/rung comment deletion. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation; re-export afterward. SFC row changes target one chart and must be the only writer operation. Rejects unsupported moves and derived topology edits. Empty patch is a no-op. dry_run performs no disk changes.",
         annotations(
             read_only_hint = false,
             destructive_hint = true,
@@ -669,5 +599,5 @@ impl XgwxServer {
     }
 }
 
-#[tool_handler(router = self.tool_router, name = "xgwx-mcp", version = "0.1.0", instructions = "Inspect the file and use the current revision for edits. Use search_project to locate decoded objects by name/address/description/operand/mnemonic/comment, then inspect edit sites before editing. Common tools rename_program/set_module_comment/set_contact_operand accept object_ref. Use prepare_change for readable before/after and commit_change with its token to save the reviewed candidate. Use focused list_modules/list_variables/list_networks discovery and list_module_catalog for available hardware. Export get_ir section modules/variables/networks for marked property edits, or section program with program_index for positional ladder/SFC text. Send an exact unified diff to apply_patch with the same section and selection. For direct operations, discover schemas with list_operations/describe_operation. Edits save immediately with backups. Re-inspect after structural edits. Local validation does not certify XG5000 or PLC acceptance.")]
+#[tool_handler(router = self.tool_router, name = "xgwx-mcp", version = "0.1.0", instructions = "Inspect the file and use the current revision for edits. Use search_project to locate decoded objects by name/address/description/operand/mnemonic/comment, then inspect edit sites before editing. rename_program accepts object_ref. Use get_ir/apply_patch for module comments and contact operands. Use prepare_change for readable before/after and commit_change with its token to save the reviewed candidate. Use focused list_modules/list_variables/list_networks discovery and list_module_catalog for available hardware. Export get_ir section modules/variables/networks for marked property edits, or section program with program_index for positional ladder/SFC text. Send an exact unified diff to apply_patch with the same section and selection. For direct operations, discover schemas with list_operations/describe_operation. Edits save immediately with backups. Re-inspect after structural edits. Local validation does not certify XG5000 or PLC acceptance.")]
 impl ServerHandler for XgwxServer {}

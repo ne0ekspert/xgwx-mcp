@@ -79,8 +79,6 @@ Configure a stdio MCP client using the binary's absolute path and arguments. An 
 | `list_operations` | Find supported writer operations by query or subsystem. |
 | `describe_operation` | Obtain an operation's exact argument schema, constraints, inspection requirements, and example. |
 | `rename_program` | Rename one program using its revision-bound object reference. |
-| `set_module_comment` | Update one installed module comment using its object reference. |
-| `set_contact_operand` | Change one XGK/IEC contact operand, preserving the existing writer guards. |
 | `prepare_change` | Preview a batch of common edits with before/after values and an exact candidate token. |
 | `commit_change` | Save the prepared candidate if the source and candidate still match. |
 | `apply_edits` | Apply ordered operations using the inspected revision; optionally dry-run the same transaction without writing files. |
@@ -137,18 +135,20 @@ file remains unchanged; preview tokens are limited to the current server session
 
 - `rename_program(path, object_ref, name, dry_run?)`: use a program reference from
   `search_project` or `inspect_file` overview/programs/program metadata.
-- `set_module_comment(path, object_ref, comment, dry_run?)`: use a physical module
-  reference from `list_modules` or `inspect_file(section:"hardware")`.
-- `set_contact_operand(path, object_ref, operand, dry_run?)`: use a contact
-  reference from `search_project`. It changes one use, not a declaration or all
-  references. Marker-only contacts without an operand string have no reference.
 
-These tools derive revision/identity/expected-value arguments, then call the same
-public writers and verified atomic-save pipeline as `apply_edits`. They save
-immediately unless `dry_run:true`. Responses include human-readable `changes`
+For module comments, export `get_ir(section:"modules")` and edit the comment
+through `apply_patch`. For contact operands, export the target program with
+`get_ir(section:"program", program_index:...)` and patch the operand.
+
+`rename_program` derives revision/identity/expected-value arguments, then calls
+the same public writers and verified atomic-save pipeline as `apply_edits`. It saves
+immediately unless `dry_run:true`. Its response includes human-readable `changes`
 with target, field, before and after values, plus the usual validation/backup data.
 
 To review a batch once and commit the exact candidate:
+
+Module comment and contact operand change types remain available inside
+`prepare_change`; they are not standalone MCP tools.
 
 ```json
 {"path":"machine.xgwx","changes":[{"type":"rename_program","object_ref":"<program reference>","name":"Conveyor"},{"type":"set_module_comment","object_ref":"<module reference>","comment":"Feed conveyor"}]}
@@ -186,7 +186,7 @@ same section and exported revision. Existing program exports use the default
 `section:"program"` with a required `program_index`.
 
 Property patches cover module comments/options, global variable metadata,
-guarded IEC local name/type/description changes, network names/module metadata,
+guarded IEC local name/type/address/description changes, network names/module metadata,
 and exported Cnet/FEnet settings. Model replacement and structural object edits
 remain direct `apply_edits` operations. Read the portable
 [property patch guide](skills/xgwx-edit/references/property-patches.md).

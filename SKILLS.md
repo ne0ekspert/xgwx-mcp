@@ -135,11 +135,12 @@ Patch edits use the same immediate-save, backup and verified transaction behavio
 
 Programs from `inspect_file` and `search_project`, physical modules from
 `list_modules`/hardware inspection, and supported contacts from `search_project`
-include `object_ref`. Use it with `rename_program(path, object_ref, name)`,
-`set_module_comment(path, object_ref, comment)` or
-`set_contact_operand(path, object_ref, operand)`. Add `dry_run:true` to preview;
-these tools otherwise save immediately with the normal backup/verification.
-Their `changes` list explains target, field and before/after values.
+include `object_ref`. Use program references with
+`rename_program(path, object_ref, name)`. Add `dry_run:true` to preview;
+otherwise it saves immediately with the normal backup/verification.
+Its `changes` list explains target, field and before/after values.
+For module comments and contact operands, export the modules or target program
+with `get_ir`, then submit the change through `apply_patch`.
 
 For reviewable batches, read the portable
 [common edit guide](skills/xgwx-edit/references/common-edits.md). Call

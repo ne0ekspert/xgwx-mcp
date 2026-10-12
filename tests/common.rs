@@ -436,8 +436,8 @@ async fn stdio_references_common_tools_preview_commit_and_recovery() {
     );
     let stale = client
         .call_tool(call(
-            "set_module_comment",
-            json!({"path":"p.xgwx","object_ref":module,"comment":"Stale"}),
+            "prepare_change",
+            json!({"path":"p.xgwx","changes":[{"type":"set_module_comment","object_ref":module,"comment":"Stale"}]}),
         ))
         .await
         .unwrap();

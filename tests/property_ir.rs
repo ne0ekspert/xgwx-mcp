@@ -205,6 +205,110 @@ fn local_descriptions_and_single_rename_are_guarded_and_reexported() {
     );
 }
 #[test]
+fn local_address_assignment_move_clear_and_native_guards() {
+    let original = fixture("function-output-wires/base.xgwx");
+    let xml = original.container().xml().replace(
+        "<Symbols Count=\"0\"></Symbols>",
+        "<Symbols Count=\"0\"> </Symbols>",
+    );
+    let mut doc = original;
+    doc.container_mut().replace_xml(xml).unwrap();
+    let mut doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
+    for name in ["AddressOne", "AddressTwo"] {
+        doc.program_mut()
+            .get(0)
+            .and_then(|mut p| p.variable_mut().insert(name, "BOOL", "Address test"))
+            .unwrap();
+    }
+    let programs = doc.program().ladder_program(0).unwrap().unwrap().data;
+    let ir = Projection::export(&doc, "revision", "variables", Some(0)).unwrap();
+    assert!(ir.text.contains("  edit address = \"\""));
+    let diff = patch(
+        &ir.text,
+        &[("  edit address = \"\"", "  edit address = \"%MX100\"")],
+    );
+    let ops = ir.lower_patch(&diff).unwrap();
+    assert_eq!(ops.len(), 1);
+    assert_eq!(ops[0].name, "update_iec_local_symbol_address");
+    assert_eq!(ops[0].args["expected_address"], "");
+    xgwx_mcp::operations::apply_operation(&mut doc, &ops[0].name, ops[0].args.clone()).unwrap();
+    let mut doc = XgwxDocument::parse(&doc.to_verified_bytes().unwrap()).unwrap();
+    assert_eq!(
+        doc.variable().iec_local_symbols()[0].as_ref().unwrap()[0]
+            .address
+            .as_deref(),
+        Some("%MX100")
+    );
+    let ir = Projection::export(&doc, "revision", "variables", Some(0)).unwrap();
+    // Allocation fields are derived, and declaration edits need re-exporting.
+    assert!(
+        ir.lower_patch(&patch(
+            &ir.text,
+            &[(
+                "  readonly allocation_number = 100",
+                "  readonly allocation_number = 200"
+            )]
+        ))
+        .is_err()
+    );
+    assert!(
+        ir.lower_patch(&patch(
+            &ir.text,
+            &[
+                ("  edit address = \"%MX100\"", "  edit address = \"%MX200\""),
+                ("  edit name = \"AddressOne\"", "  edit name = \"Renamed\"")
+            ]
+        ))
+        .is_err()
+    );
+    for (old, new) in [("", "%MX100"), ("%MX100", "%IX0.1.0"), ("%MX100", "%MXbad")] {
+        let ir = Projection::export(&doc, "revision", "variables", Some(0)).unwrap();
+        let diff = patch(
+            &ir.text,
+            &[(
+                &format!("  edit address = {}", json!(old)),
+                &format!("  edit address = {}", json!(new)),
+            )],
+        );
+        let ops = ir.lower_patch(&diff).unwrap();
+        let before = doc.to_bytes().unwrap();
+        assert!(
+            xgwx_mcp::operations::apply_operation(&mut doc, &ops[0].name, ops[0].args.clone())
+                .is_err()
+        );
+        assert_eq!(doc.to_bytes().unwrap(), before);
+    }
+    for (old, new) in [("%MX100", "%MX200"), ("%MX200", ""), ("", "%MX300")] {
+        apply(
+            &mut doc,
+            "variables",
+            Some(0),
+            &[(
+                &format!("  edit address = {}", json!(old)),
+                &format!("  edit address = {}", json!(new)),
+            )],
+        );
+        doc = XgwxDocument::parse(&doc.to_verified_bytes().unwrap()).unwrap();
+        let symbols = doc.variable().iec_local_symbols();
+        let symbol = &symbols[0].as_ref().unwrap()[0];
+        assert_eq!(symbol.address.as_deref().unwrap_or(""), new);
+        assert_eq!(
+            symbol.allocation_number,
+            if new.is_empty() {
+                None
+            } else {
+                Some(new[3..].parse().unwrap())
+            }
+        );
+        assert_eq!(symbol.storage_class, if new.is_empty() { "" } else { "M" });
+    }
+    assert_eq!(
+        doc.program().ladder_program(0).unwrap().unwrap().data,
+        programs
+    );
+}
+
+#[test]
 fn network_metadata_fenet_and_grouped_cnet_settings_preserve_other_payloads() {
     let mut doc = fixture("empty-projects/new-xgk.xgwx");
     doc.base_mut()

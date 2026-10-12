@@ -23,11 +23,11 @@ Use `validate_file(path)` to report container verification and available decoded
 
 ## Common edits and reusable previews
 
-For renaming a program, updating a module comment or changing one contact
-operand, read [common-edits.md](references/common-edits.md). Copy `object_ref`
-from the target inspection/search object and use `rename_program`,
-`set_module_comment` or `set_contact_operand`. These derive writer coordinates
-and guards; `dry_run:true` previews and the default saves immediately.
+For renaming a program, read [common-edits.md](references/common-edits.md).
+Copy `object_ref` from the target inspection/search object and use
+`rename_program`. It derives writer coordinates and guards; `dry_run:true`
+previews and the default saves immediately. For module comments and contact
+operands, use `get_ir` and `apply_patch` with the modules or program section.
 
 Use `prepare_change` for a reviewed batch of common edits, then
 `commit_change(change_token)` to save the exact verified candidate. Inspect the

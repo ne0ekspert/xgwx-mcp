@@ -23,8 +23,6 @@ All tool arguments and inspection DTO fields use snake_case. Operation names are
 | `list_operations` | optional `query`, optional `subsystem` | Searchable operation descriptions grouped by subsystem. |
 | `describe_operation` | `name` | Exact JSON argument schema, preconditions, required inspection fields, example, and alias information. |
 | `rename_program` | `path`, `object_ref`, `name`, `dry_run=false` | Verified transaction plus readable `changes`. |
-| `set_module_comment` | `path`, `object_ref`, `comment`, `dry_run=false` | Same; physical selection remains unique. |
-| `set_contact_operand` | `path`, `object_ref`, `operand`, `dry_run=false` | Same; single XGK/IEC contact use. |
 | `prepare_change` | `path`, `changes=[{type,object_ref,name or comment or operand}]` | Dry-run transaction plus readable changes, session-scoped token and expiry. |
 | `commit_change` | `change_token` | Exact-candidate transaction plus readable changes; consumes token after success. |
 | `apply_edits` | `path`, `expected_revision`, `operations=[{name,args}]`, `dry_run=false` | `{path, revision_before, revision_after, changed, dry_run, backup_path, results, validation}` |
@@ -186,10 +184,14 @@ under the transaction locks; never accept client source mappings. Keep headers,
 object identities/order, field keys, markers and readonly lines fixed. Reject
 creation/deletion, non-scalar injections, nulling fields, type changes and forged
 identities. Equivalent string escapes are no-ops. Missing/undecoded fields remain
-readonly. Restrict local rename/type changes to one mutation then require export.
+readonly. Restrict local rename/type/address changes to one mutation then require export.
+Supported primitive local addresses use quoted strings, including "" for no
+explicit mapping; retain readonly derived storage/allocation metadata and
+instance/unsupported addresses. Route address edits through the existing
+expected-name/address writer and preserve its area, width and overlap guards.
 
 Support module comments/decoded options, global name/address/type/description,
-IEC local name/type/description, guarded network names/module metadata and
+IEC local name/type/address/description, guarded network names/module metadata and
 exported Cnet/FEnet settings. Coalesce global fields per index and Cnet settings
 per base/slot so native interdependent guards run on one proposed result.
 Preserve positional program patch compatibility; program_index stays required

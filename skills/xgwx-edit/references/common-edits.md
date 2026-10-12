@@ -1,27 +1,30 @@
 # Common edits using object references
 
-Locate files with shell commands. Obtain `object_ref` for the chosen target:
+Locate files with shell commands. Inspect or export the chosen target:
 
 | Task | Reference source | Tool and value field |
 | --- | --- | --- |
 | Rename a program | `inspect_file` overview/programs/program summary, or `search_project(kind:"program")` | `rename_program`, `name` |
-| Update a module comment | `list_modules` or `inspect_file(section:"hardware")`, `data.modules.items` | `set_module_comment`, `comment` |
-| Change one contact operand | `search_project(kind:"contact")` | `set_contact_operand`, `operand` |
+| Update a module comment | `get_ir(section:"modules")` | `apply_patch`, editable comment |
+| Change one contact operand | `get_ir(section:"program", program_index:...)` | `apply_patch`, contact operand |
 
-Every common tool accepts `path`, `object_ref`, its value field, and optional
+`rename_program` accepts `path`, `object_ref`, its value field, and optional
 `dry_run` (default false). Copy references as-is. They are bound to the canonical
 file, revision, kind and observed identity/value. They are not permission or a
 writability certificate. The server resolves current data and retains the
 library's original identity, expected-text, type, layout and physical-selection
 guards. Marker-only contacts without operand strings do not receive references.
 
-Common tools save immediately unless dry-running. Their `changes` list includes
+`rename_program` saves immediately unless dry-running. Its `changes` list includes
 a readable summary, target context, field, before and after values. Report the
 usual validation, new revision and backup. Contact edits affect one use; they do
 not rename a symbol or change its other uses. Use existing operation workflows
 for broader changes.
 
 ## Prepare and commit
+
+`set_module_comment` and `set_contact_operand` remain change types inside
+`prepare_change`; they are not standalone MCP tools.
 
 Call `prepare_change` with a batch of common changes:
 

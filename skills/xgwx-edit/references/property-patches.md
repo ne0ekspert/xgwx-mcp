@@ -90,6 +90,7 @@ another edit. Stale revisions and any failed native writer abort the transaction
 | Module comment | update_module |
 | Decoded module option key/index/value | set_module_option |
 | Global name/address area/address number/type/description | update_variable |
+| IEC local address | update_iec_local_symbol_address |
 | IEC local description | update_iec_local_symbol_description |
 | IEC local name or primitive type | rename_iec_local_symbol / update_iec_local_symbol_type |
 | Network name, linked module config_name/alias/description | edit_browser_network |
@@ -102,10 +103,14 @@ keys retain the public writer's spelling and raw values; use describe_operation
 and current settings rather than guessing enum numbers or address formats.
 The native validators still check masks, limits, ports, types and wiring rules.
 
-IEC local rename/type changes must be the sole mutation, then re-export because
-symbol order/allocation/reference data can change. Existing IEC local addresses,
-allocation metadata, instance types, missing fields and undecoded tables remain
-readonly. Module model replacement, object creation/deletion/movement, network
+IEC local rename/type/address changes must be the sole mutation, then re-export
+because symbol order/allocation/reference data can change. Supported primitive
+IEC locals expose `edit address` as a quoted string; `""` assigns no explicit
+address and clears an existing mapping. The native writer enforces captured
+address areas, type widths, automatic-allocation restrictions and overlap checks.
+Storage class and allocation metadata are derived and remain readonly, as do
+instance addresses/types, unsupported types, missing fields and undecoded tables.
+Module model replacement, object creation/deletion/movement, network
 protocol identity changes and SFC declaration edits are outside this property
 syntax; use their supported direct operations or SFC workflow.
 

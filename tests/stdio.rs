@@ -37,8 +37,6 @@ async fn real_stdio_inspection_schema_dry_run_edit_and_validation() {
             "inspect_file",
             "search_project",
             "rename_program",
-            "set_module_comment",
-            "set_contact_operand",
             "prepare_change",
             "commit_change",
             "list_modules",
