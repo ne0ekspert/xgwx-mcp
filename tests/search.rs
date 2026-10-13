@@ -136,6 +136,105 @@ fn repeated_locations_kind_filters_and_single_result_pagination() {
 }
 
 #[test]
+fn linked_alias_descriptions_keep_all_address_candidates_and_page_order() {
+    let mut doc = fixture("elements.xgwx");
+    let variables = doc.variable().variables().unwrap();
+    let program = doc.program().ladder_program(0).unwrap().unwrap();
+    let contacts = program
+        .structure
+        .rungs
+        .iter()
+        .flat_map(|r| &r.cells)
+        .filter(|c| c.contact.is_some() && !c.value.is_empty())
+        .collect::<Vec<_>>();
+    let (target_index, target) = variables
+        .iter()
+        .enumerate()
+        .find(|(_, variable)| {
+            variable.address.as_ref().is_some_and(|address| {
+                contacts
+                    .iter()
+                    .any(|contact| contact.value.eq_ignore_ascii_case(address))
+            })
+        })
+        .unwrap();
+    let alias_index = (0..variables.len()).find(|&i| i != target_index).unwrap();
+    let address = target.address.as_ref().unwrap();
+    let other_contact = contacts
+        .iter()
+        .find(|c| !c.value.eq_ignore_ascii_case(address))
+        .unwrap();
+    apply_operation(
+        &mut doc,
+        "update_ladder_cell_text",
+        json!({
+        "program_index":0,"offset":other_contact.offset,"expected":other_contact.value,
+        "replacement":address}),
+    )
+    .unwrap();
+    let marker = "Indexed address alias 한글";
+    apply_operation(
+        &mut doc,
+        "update_variable",
+        json!({
+        "variable_index":target_index,"patch":{"description":marker}}),
+    )
+    .unwrap();
+    apply_operation(
+        &mut doc,
+        "update_variable",
+        json!({
+        "variable_index":alias_index,"patch":{"address_area":target.address_area,
+        "address_number":target.address_number,"data_type":target.data_type,"description":marker}}),
+    )
+    .unwrap();
+    let mut req = request(marker);
+    req.kind = Some(SearchKind::Contact);
+    let all = search(&doc, &req).unwrap();
+    assert!(items(&all).len() >= 2);
+    let expected_indices = doc
+        .variable()
+        .variables()
+        .unwrap()
+        .iter()
+        .enumerate()
+        .filter(|(_, variable)| {
+            [variable.name.as_deref(), variable.address.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|value| !value.is_empty() && value.to_lowercase() == address.to_lowercase())
+        })
+        .map(|(i, _)| json!(i))
+        .collect::<Vec<_>>();
+    assert!(expected_indices.contains(&json!(target_index)));
+    assert!(expected_indices.contains(&json!(alias_index)));
+    for contact in items(&all) {
+        assert_eq!(
+            contact["symbols"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|symbol| symbol["variable_index"].clone())
+                .collect::<Vec<_>>(),
+            expected_indices
+        );
+    }
+    req.limit = 1;
+    let mut collected = vec![];
+    loop {
+        let page = search(&doc, &req).unwrap();
+        assert_eq!(page["total"], all["total"]);
+        collected.extend_from_slice(items(&page));
+        if let Some(next) = page["next_offset"].as_u64() {
+            req.offset = next as usize;
+        } else {
+            break;
+        }
+    }
+    assert_eq!(collected, items(&all));
+}
+
+#[test]
 fn iec_contacts_and_functions_retain_native_locations() {
     let doc = fixture("ladder-wire-delete/iec-horizontal-native.xgwx");
     let program = doc.program().ladder_program(0).unwrap().unwrap();

@@ -3,6 +3,7 @@ use crate::storage::StoreError;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use xgwx::{IecRecordKind, LadderProgramData, XgwxDocument};
 
 #[derive(Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -115,31 +116,77 @@ fn contains(value: &Value, needle: &str, case_sensitive: bool) -> bool {
         _ => false,
     }
 }
-fn symbol_matches(operand: &str, symbol: &Value) -> bool {
-    ["name", "address"].iter().any(|field| {
-        symbol[field]
-            .as_str()
-            .is_some_and(|s| !s.is_empty() && s.to_lowercase() == operand.to_lowercase())
-    })
+#[derive(Default)]
+struct SymbolMatches {
+    indices: Vec<usize>,
+    has_name: bool,
 }
-fn attach_symbols(item: &mut Value, globals: &[Value], locals: &[Value]) {
-    let operands = item["operands"].as_array().cloned().unwrap_or_default();
-    let mut symbols = Vec::new();
-    for operand in operands.iter().filter_map(Value::as_str) {
-        // A local name shadows a global name. Address matches still retain all candidates.
-        let local_name = locals.iter().any(|s| {
-            s["name"]
+struct SymbolIndex<'a> {
+    symbols: &'a [Value],
+    names: Vec<Option<String>>,
+    matches: HashMap<String, SymbolMatches>,
+}
+impl<'a> SymbolIndex<'a> {
+    fn new(symbols: &'a [Value]) -> Self {
+        let mut index = Self {
+            symbols,
+            names: Vec::with_capacity(symbols.len()),
+            matches: HashMap::new(),
+        };
+        // Each key retains declaration order. A declaration whose name and
+        // address normalize to the same key contributes only one candidate.
+        for (position, symbol) in symbols.iter().enumerate() {
+            let name = symbol["name"].as_str().map(str::to_lowercase);
+            if let Some(name) = name.as_ref().filter(|name| !name.is_empty()) {
+                let matches = index.matches.entry(name.clone()).or_default();
+                matches.indices.push(position);
+                matches.has_name = true;
+            }
+            if let Some(address) = symbol["address"]
                 .as_str()
-                .is_some_and(|n| n.to_lowercase() == operand.to_lowercase())
-        });
-        for symbol in locals.iter().chain(globals.iter().filter(|s| {
-            !local_name
-                || !s["name"]
-                    .as_str()
-                    .is_some_and(|n| n.to_lowercase() == operand.to_lowercase())
-        })) {
-            if symbol_matches(operand, symbol) && !symbols.contains(symbol) {
-                symbols.push(symbol.clone());
+                .filter(|address| !address.is_empty())
+                .map(str::to_lowercase)
+                && name.as_ref() != Some(&address)
+            {
+                index
+                    .matches
+                    .entry(address)
+                    .or_default()
+                    .indices
+                    .push(position);
+            }
+            index.names.push(name);
+        }
+        index
+    }
+}
+fn attach_symbols(item: &mut Value, globals: &SymbolIndex<'_>, locals: &SymbolIndex<'_>) {
+    let mut symbols = Vec::new();
+    for operand in item["operands"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
+        let operand = operand.to_lowercase();
+        // A local name shadows a global name. Address matches still retain all candidates.
+        let local_matches = locals.matches.get(&operand);
+        let local_name = local_matches.is_some_and(|matches| matches.has_name);
+        for (index, matches, is_global) in [
+            (locals, local_matches, false),
+            (globals, globals.matches.get(&operand), true),
+        ] {
+            for &position in matches.into_iter().flat_map(|matches| &matches.indices) {
+                if is_global
+                    && local_name
+                    && index.names[position].as_deref() == Some(operand.as_str())
+                {
+                    continue;
+                }
+                let symbol = &index.symbols[position];
+                if !symbols.contains(&symbol) {
+                    symbols.push(symbol);
+                }
             }
         }
     }
@@ -152,8 +199,8 @@ fn ladder(
     search: &mut Search<'_>,
     program: &LadderProgramData,
     context: &Value,
-    globals: &[Value],
-    locals: &[Value],
+    globals: &SymbolIndex<'_>,
+    locals: &SymbolIndex<'_>,
 ) {
     if program.project_type == Some(2) {
         let Some(records) = program.iec_record_frames() else {
@@ -362,6 +409,7 @@ pub fn search(doc: &XgwxDocument, request: &SearchRequest) -> Result<Value, Stor
     for variable in &globals {
         search.add(SearchKind::Variable, variable.clone());
     }
+    let mut global_index = None;
     let local_tables = doc.variable().iec_local_symbols();
     let texts = doc.program().text_programs();
     let sfcs = doc.program().sfc_programs();
@@ -402,7 +450,13 @@ pub fn search(doc: &XgwxDocument, request: &SearchRequest) -> Result<Value, Stor
             }
         }
         match doc.program().ladder_program(index) {
-            Some(Ok(program)) => ladder(&mut search, &program, &context, &globals, &locals),
+            Some(Ok(program)) => ladder(
+                &mut search,
+                &program,
+                &context,
+                global_index.get_or_insert_with(|| SymbolIndex::new(&globals)),
+                &SymbolIndex::new(&locals),
+            ),
             Some(Err(e)) => search.limitation(Some(index), "program", e),
             None => search.limitation(Some(index), "program", "No decoded ladder payload"),
         }
@@ -416,6 +470,85 @@ pub fn search(doc: &XgwxDocument, request: &SearchRequest) -> Result<Value, Stor
 #[cfg(test)]
 mod tests {
     use super::*;
+    // The previous scan is a compatibility oracle for ordering, exact Unicode
+    // lowercase matching, shadowing and value-based deduplication.
+    fn reference_attach_symbols(item: &mut Value, globals: &[Value], locals: &[Value]) {
+        let operands = item["operands"].as_array().cloned().unwrap_or_default();
+        let mut symbols = Vec::new();
+        for operand in operands.iter().filter_map(Value::as_str) {
+            let local_name = locals.iter().any(|s| {
+                s["name"]
+                    .as_str()
+                    .is_some_and(|n| n.to_lowercase() == operand.to_lowercase())
+            });
+            for symbol in locals.iter().chain(globals.iter().filter(|s| {
+                !local_name
+                    || !s["name"]
+                        .as_str()
+                        .is_some_and(|n| n.to_lowercase() == operand.to_lowercase())
+            })) {
+                let matches = ["name", "address"].iter().any(|field| {
+                    symbol[field].as_str().is_some_and(|s| {
+                        !s.is_empty() && s.to_lowercase() == operand.to_lowercase()
+                    })
+                });
+                if matches && !symbols.contains(symbol) {
+                    symbols.push(symbol.clone());
+                }
+            }
+        }
+        item["symbols"] = json!(symbols);
+    }
+    #[test]
+    fn indexed_linking_matches_scan_for_unicode_collisions_duplicates_and_operand_order() {
+        let shared =
+            json!({"name":"Shared","address":"M00000","description":"Same value in both tables"});
+        let mut locals = vec![
+            json!({"scope":"local","name":"PUMP","address":"M00001","description":"Local name"}),
+            json!({"scope":"local","name":"Other","address":"pump","description":"Local address"}),
+            json!({"scope":"local","name":"pump","address":"PUMP","description":"Name and address collide"}),
+            json!({"scope":"local","name":"İ","address":"%MX0","description":"Unicode expansion"}),
+            shared.clone(),
+        ];
+        locals.push(locals[0].clone());
+        let mut globals = vec![
+            json!({"scope":"global","name":"Pump","address":"pump","description":"Shadowed even at matching address"}),
+            json!({"scope":"global","name":"GlobalAlias","address":"PUMP","description":"Global address survives"}),
+            json!({"scope":"global","name":"Σ","address":"M00000","description":"Greek sigma"}),
+            json!({"scope":"global","name":"ς","address":"M00002","description":"Distinct final sigma"}),
+            json!({"scope":"global","name":"Straße","address":"M00003","description":"Not case folding"}),
+            json!({"scope":"global","name":"STRASSE","address":"M00004","description":"Distinct spelling"}),
+            shared,
+            json!({"name":"","address":"","description":"Empty values do not link"}),
+            json!({"name":null,"address":null,"description":"Missing values"}),
+        ];
+        globals.push(globals[1].clone());
+        let global_index = SymbolIndex::new(&globals);
+        let local_index = SymbolIndex::new(&locals);
+        for operands in [
+            json!(["pump"]),
+            json!(["M00000", "pump", "M00000", "shared"]),
+            json!(["pump", "M00000"]),
+            json!(["PUMP", "%mx0", "i\u{307}", "İ"]),
+            json!(["σ", "Σ", "ς", "straße", "strasse"]),
+            json!(["", "M0", "pump + 1", false, null, 1]),
+            json!([]),
+            Value::Null,
+            json!("pump"),
+        ] {
+            let mut expected = json!({"operands":operands,"kept":{"field":"metadata"}});
+            let mut actual = expected.clone();
+            reference_attach_symbols(&mut expected, &globals, &locals);
+            attach_symbols(&mut actual, &global_index, &local_index);
+            assert_eq!(actual, expected);
+        }
+        let mut item = json!({"operands":["pump"]});
+        attach_symbols(&mut item, &global_index, &local_index);
+        assert_eq!(
+            item["symbols"],
+            json!([locals[0], locals[1], locals[2], globals[1]])
+        );
+    }
     #[test]
     fn local_names_shadow_globals_but_ambiguous_addresses_remain_visible() {
         let globals = vec![
@@ -425,14 +558,16 @@ mod tests {
         let locals = vec![
             json!({"scope":"local","name":"PUMP","address":"P0002","description":"Local pump"}),
         ];
+        let global_index = SymbolIndex::new(&globals);
+        let local_index = SymbolIndex::new(&locals);
         let mut item = json!({"operands":["pump"]});
-        attach_symbols(&mut item, &globals, &locals);
+        attach_symbols(&mut item, &global_index, &local_index);
         assert_eq!(item["symbols"], json!([locals[0]]));
         item = json!({"operands":["P0001"]});
-        attach_symbols(&mut item, &globals, &locals);
+        attach_symbols(&mut item, &global_index, &local_index);
         assert_eq!(item["symbols"], json!(globals));
         item = json!({"operands":["P0001 + 1","P1"]});
-        attach_symbols(&mut item, &globals, &locals);
+        attach_symbols(&mut item, &global_index, &local_index);
         assert_eq!(item["symbols"], json!([]));
     }
 }

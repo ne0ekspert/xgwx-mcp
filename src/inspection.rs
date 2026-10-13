@@ -893,15 +893,48 @@ pub fn inspect(
     })
 }
 
+/// A successful container verification and its exact output. Keeping the
+/// document borrowed prevents edits between verification and diagnostics.
+pub(crate) struct VerifiedOutput<'a> {
+    doc: &'a XgwxDocument,
+    bytes: Vec<u8>,
+}
+
+impl<'a> VerifiedOutput<'a> {
+    pub(crate) fn verify(doc: &'a XgwxDocument) -> Result<Self, XgwxError> {
+        Ok(Self {
+            doc,
+            bytes: doc.to_verified_bytes()?,
+        })
+    }
+
+    pub(crate) fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    pub(crate) fn validation(&self) -> Value {
+        validation_diagnostics(
+            self.doc,
+            json!({"status": "verified", "serialized_length": self.bytes.len(),
+            "checks": ["container serialization", "reparse", "XML and preserved header/trailer verification"]}),
+        )
+    }
+}
+
 /// Container verification is not a compiler or native XG5000 acceptance check.
 /// The partial decoders report their limits and accept incomplete geometry where
 /// the library writers support native incomplete circuits.
 pub fn validate(doc: &XgwxDocument) -> Value {
-    let container = match doc.to_verified_bytes() {
-        Ok(bytes) => json!({"status": "verified", "serialized_length": bytes.len(),
-            "checks": ["container serialization", "reparse", "XML and preserved header/trailer verification"]}),
-        Err(error) => json!({"status": "verification_error", "error": error.to_string()}),
-    };
+    match VerifiedOutput::verify(doc) {
+        Ok(verified) => verified.validation(),
+        Err(error) => validation_diagnostics(
+            doc,
+            json!({"status": "verification_error", "error": error.to_string()}),
+        ),
+    }
+}
+
+fn validation_diagnostics(doc: &XgwxDocument, container: Value) -> Value {
     let sfc = doc.program().sfc_programs();
     let texts = doc.program().text_programs();
     let programs = doc.program().programs().iter().enumerate().map(|(index, summary)| {
@@ -981,6 +1014,72 @@ mod tests {
                 .join(relative),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn verified_output_preserves_validation_for_unchanged_and_changed_programs() {
+        let mut documents = [
+            "elements.xgwx",
+            "ladder-wire-delete/iec-horizontal-native.xgwx",
+            "sfc/structural-build.xgwx",
+            "sfc/native-st-programs.xgwx",
+        ]
+        .into_iter()
+        .map(fixture)
+        .collect::<Vec<_>>();
+        documents.push(crate::templates::ProjectTemplate::XgiIl.document().unwrap());
+        for mut doc in documents {
+            let original = doc.to_bytes().unwrap();
+            let verified = VerifiedOutput::verify(&doc).unwrap();
+            assert_eq!(verified.bytes(), original);
+            assert_eq!(verified.validation(), validate(&doc));
+            assert_eq!(verified.validation()["container"]["status"], "verified");
+            assert_eq!(
+                verified.validation()["container"]["serialized_length"],
+                original.len()
+            );
+            // End the proof's borrow before changing the document, then verify
+            // and diagnose the edited document without reparsing its output.
+            drop(verified);
+            doc.program_mut()
+                .get(0)
+                .and_then(|mut program| program.rename("Verified candidate"))
+                .unwrap();
+            let verified = VerifiedOutput::verify(&doc).unwrap();
+            assert_ne!(verified.bytes(), original);
+            assert_eq!(verified.validation(), validate(&doc));
+            assert_eq!(
+                verified.validation()["program_diagnostics"][0]["name"],
+                "Verified candidate"
+            );
+        }
+    }
+
+    #[test]
+    fn standalone_validation_retains_verification_errors_and_program_diagnostics() {
+        let original = fixture("elements.xgwx");
+        // This container can be read but its abbreviated header cannot be
+        // rewritten. XML replacement creates a genuine serialization failure.
+        let bytes = [b"XG".as_slice(), original.container().main_gzip()].concat();
+        let mut doc = XgwxDocument::parse(&bytes).unwrap();
+        let xml = format!("{}\n", doc.container().xml());
+        doc.container_mut().replace_xml(xml).unwrap();
+        let error = doc.to_verified_bytes().unwrap_err().to_string();
+        assert!(VerifiedOutput::verify(&doc).is_err());
+        let validation = validate(&doc);
+        assert_eq!(
+            validation["container"],
+            json!({
+                "status": "verification_error", "error": error,
+            })
+        );
+        assert!(
+            !validation["program_diagnostics"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(validation["native_acceptance"]["status"], "unverified");
     }
 
     #[test]

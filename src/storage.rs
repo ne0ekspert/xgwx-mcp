@@ -252,10 +252,10 @@ impl FileStore {
             })?;
             results.push(json!({"index":index,"name":operation.name,"result":result}));
         }
-        let output = doc
-            .to_verified_bytes()
+        let verified = crate::inspection::VerifiedOutput::verify(&doc)
             .map_err(|e| StoreError::new("verification_failed", e))?;
-        let validation = crate::inspection::validate(&doc);
+        let output = verified.bytes();
+        let validation = verified.validation();
         if !dry_run {
             // Prepare and verify before creating even the lock sidecar. The shared
             // path lock coordinates creation with edits from other server processes.
@@ -266,10 +266,10 @@ impl FileStore {
                     "destination parent changed before creation",
                 ));
             }
-            create_new_file(&path, &output)?;
+            create_new_file(&path, output)?;
         }
         Ok(
-            json!({"path":path,"created":!dry_run,"dry_run":dry_run,"revision_before":null,"revision_after":revision(&output),"backup_path":null,"template":template.metadata()?,"cpu_model":crate::templates::cpu_model(&doc),"project_name":doc.project().name(),"program_name":doc.program().programs().first().and_then(|p| p.name.clone()),"program_language":template.language(),"results":results,"validation":validation}),
+            json!({"path":path,"created":!dry_run,"dry_run":dry_run,"revision_before":null,"revision_after":revision(output),"backup_path":null,"template":template.metadata()?,"cpu_model":crate::templates::cpu_model(&doc),"project_name":doc.project().name(),"program_name":doc.program().programs().first().and_then(|p| p.name.clone()),"program_language":template.language(),"results":results,"validation":validation}),
         )
     }
 
@@ -400,20 +400,20 @@ impl FileStore {
             })?;
             results.push(json!({"index":index,"name":operation.name,"result":result}));
         }
-        let output = doc
-            .to_verified_bytes()
+        let verified = crate::inspection::VerifiedOutput::verify(&doc)
             .map_err(|e| StoreError::new("verification_failed", e))?;
-        let after = revision(&output);
+        let output = verified.bytes();
+        let after = revision(output);
         if expected_candidate.is_some_and(|candidate| candidate != after) {
             return Err(StoreError::new(
                 "candidate_changed",
                 "Regenerated output differs from the reviewed candidate; prepare a fresh preview",
             ));
         }
-        let changed = output != original;
-        let validation = crate::inspection::validate(&doc);
+        let changed = output != original.as_slice();
+        let validation = verified.validation();
         let backup = if changed && !dry_run {
-            Some(replace_file(&path, &original, &output)?)
+            Some(replace_file(&path, &original, output)?)
         } else {
             None
         };
@@ -696,6 +696,46 @@ mod tests {
                 .apply("project.xgwx", &revision(&original), &[bad], false)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn verification_failure_keeps_source_and_produces_no_backup() {
+        let (dir, store, path) = setup();
+        let doc = XgwxDocument::from_path(&path).unwrap();
+        let original = [b"XG".as_slice(), doc.container().main_gzip()].concat();
+        fs::write(&path, &original).unwrap();
+        let mut candidate = XgwxDocument::parse(&original).unwrap();
+        candidate
+            .program_mut()
+            .get(0)
+            .unwrap()
+            .update(&xgwx::ProgramPatch {
+                comment: Some("Unsupported header".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        let expected_error = candidate.to_verified_bytes().unwrap_err().to_string();
+        for dry_run in [true, false] {
+            let error = store
+                .apply(
+                    "project.xgwx",
+                    &revision(&original),
+                    &[comment("Unsupported header")],
+                    dry_run,
+                )
+                .unwrap_err();
+            assert_eq!(error.code, "verification_failed");
+            assert_eq!(error.message, expected_error);
+            assert!(error.backup_path.is_none());
+            assert_eq!(fs::read(&path).unwrap(), original);
+            assert!(!fs::read_dir(dir.path()).unwrap().any(|entry| {
+                entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .contains("backup")
+            }));
+        }
     }
 
     #[test]

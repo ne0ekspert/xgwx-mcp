@@ -8,7 +8,9 @@ use std::{
     path::Path,
     time::{Duration, Instant},
 };
-use xgwx::{IecRecordKind, XgwxDocument};
+use xgwx::{
+    IecRecordFrame, IecRecordKind, LadderProgramData, ModuleSummary, ProgramSummary, XgwxDocument,
+};
 
 fn invalid(message: impl ToString) -> StoreError {
     StoreError::new("invalid_object_ref", message)
@@ -75,67 +77,169 @@ fn snapshot(doc: &XgwxDocument, target: &Target) -> Result<Value, StoreError> {
                 .ladder_program(index)
                 .ok_or_else(|| invalid("Program is not ladder"))?
                 .map_err(invalid)?;
-            let mut result = json!({"program_index":index,"program_name":summary.name,"object_id":summary.object_id,"string_offset":offset,"project_type":p.project_type});
-            if p.project_type == Some(2) {
-                let records = p.iec_record_frames().ok_or_else(|| {
-                    StoreError::new("unsupported_target", "IEC contact layout is not decoded")
-                })?;
-                let mut matching = records.iter().filter(|r| {
-                    r.offset + 15 == offset && matches!(r.kind, IecRecordKind::Contact(_))
-                });
-                let r = matching
-                    .next()
-                    .ok_or_else(|| invalid("Reference does not identify an IEC contact"))?;
-                if matching.next().is_some() {
-                    return Err(invalid("Ambiguous IEC contact"));
-                }
-                let string = p
-                    .strings
-                    .iter()
-                    .find(|s| s.offset == offset)
-                    .ok_or_else(|| invalid("Contact operand is not decoded"))?;
-                result["operand"] = json!(string.value);
-                result["location"] = json!({"group_index":r.group_index,"row_index":r.row_index,"raw_x":p.data.get(r.offset + 5),"record_offset":r.offset});
-                if let IecRecordKind::Contact(code) = r.kind {
-                    result["contact_kind"] = json!(code);
-                }
-            } else if p.project_type == Some(1) {
-                let mut matching = p
-                    .structure
-                    .rungs
-                    .iter()
-                    .flat_map(|r| &r.cells)
-                    .filter(|c| c.offset == offset && c.contact.is_some());
-                let c = matching
-                    .next()
-                    .ok_or_else(|| invalid("Reference does not identify an XGK contact"))?;
-                if matching.next().is_some() {
-                    return Err(invalid("Ambiguous XGK contact"));
-                }
-                // Marker-only inverse/pulse contacts have no editable operand string.
-                let string = p
-                    .strings
-                    .iter()
-                    .find(|s| s.offset == offset && s.value == c.value)
-                    .ok_or_else(|| {
-                        StoreError::new(
-                            "unsupported_target",
-                            "Contact has no editable operand string",
-                        )
-                    })?;
-                result["operand"] = json!(string.value);
-                result["location"] = json!({"raw_x":c.raw_x,"raw_y":c.raw_y});
-                result["contact_kind"] = json!(format!("{:?}", c.contact.unwrap()));
-            } else {
-                return Err(StoreError::new(
-                    "unsupported_target",
-                    "Contact format is not supported",
-                ));
-            }
-            Ok(result)
+            let records = (p.project_type == Some(2))
+                .then(|| p.iec_record_frames())
+                .flatten();
+            contact_snapshot(index, offset, &summary, &p, records.as_deref())
         }
     }
 }
+fn contact_snapshot(
+    index: usize,
+    offset: usize,
+    summary: &ProgramSummary,
+    p: &LadderProgramData,
+    records: Option<&[IecRecordFrame]>,
+) -> Result<Value, StoreError> {
+    let mut result = json!({"program_index":index,"program_name":summary.name,"object_id":summary.object_id,"string_offset":offset,"project_type":p.project_type});
+    if p.project_type == Some(2) {
+        let records = records.ok_or_else(|| {
+            StoreError::new("unsupported_target", "IEC contact layout is not decoded")
+        })?;
+        let mut matching = records
+            .iter()
+            .filter(|r| r.offset + 15 == offset && matches!(r.kind, IecRecordKind::Contact(_)));
+        let r = matching
+            .next()
+            .ok_or_else(|| invalid("Reference does not identify an IEC contact"))?;
+        if matching.next().is_some() {
+            return Err(invalid("Ambiguous IEC contact"));
+        }
+        let string = p
+            .strings
+            .iter()
+            .find(|s| s.offset == offset)
+            .ok_or_else(|| invalid("Contact operand is not decoded"))?;
+        result["operand"] = json!(string.value);
+        result["location"] = json!({"group_index":r.group_index,"row_index":r.row_index,"raw_x":p.data.get(r.offset + 5),"record_offset":r.offset});
+        if let IecRecordKind::Contact(code) = r.kind {
+            result["contact_kind"] = json!(code);
+        }
+    } else if p.project_type == Some(1) {
+        let mut matching = p
+            .structure
+            .rungs
+            .iter()
+            .flat_map(|r| &r.cells)
+            .filter(|c| c.offset == offset && c.contact.is_some());
+        let c = matching
+            .next()
+            .ok_or_else(|| invalid("Reference does not identify an XGK contact"))?;
+        if matching.next().is_some() {
+            return Err(invalid("Ambiguous XGK contact"));
+        }
+        // Marker-only inverse/pulse contacts have no editable operand string.
+        let string = p
+            .strings
+            .iter()
+            .find(|s| s.offset == offset && s.value == c.value)
+            .ok_or_else(|| {
+                StoreError::new(
+                    "unsupported_target",
+                    "Contact has no editable operand string",
+                )
+            })?;
+        result["operand"] = json!(string.value);
+        result["location"] = json!({"raw_x":c.raw_x,"raw_y":c.raw_y});
+        result["contact_kind"] = json!(format!("{:?}", c.contact.unwrap()));
+    } else {
+        return Err(StoreError::new(
+            "unsupported_target",
+            "Contact format is not supported",
+        ));
+    }
+    Ok(result)
+}
+
+struct DecodedContacts {
+    program: LadderProgramData,
+    records: Option<Vec<IecRecordFrame>>,
+}
+
+/// Only annotation shares decoded views. Reference resolution still reads a fresh
+/// snapshot, and this context cannot outlive or mutate its source document.
+struct AnnotationSnapshots<'a> {
+    doc: &'a XgwxDocument,
+    programs: Option<Vec<ProgramSummary>>,
+    modules: Option<Vec<ModuleSummary>>,
+    ladders: HashMap<usize, Option<Result<DecodedContacts, String>>>,
+    #[cfg(test)]
+    ladder_decode_count: usize,
+}
+impl<'a> AnnotationSnapshots<'a> {
+    fn new(doc: &'a XgwxDocument) -> Self {
+        Self {
+            doc,
+            programs: None,
+            modules: None,
+            ladders: HashMap::new(),
+            #[cfg(test)]
+            ladder_decode_count: 0,
+        }
+    }
+    fn snapshot(&mut self, target: &Target) -> Result<Value, StoreError> {
+        match *target {
+            Target::Program(index) => {
+                let p = self
+                    .programs
+                    .get_or_insert_with(|| self.doc.program().programs())
+                    .get(index)
+                    .ok_or_else(|| invalid("Program no longer exists"))?;
+                Ok(
+                    json!({"program_index":index,"name":p.name,"object_id":p.object_id,"kind":p.kind}),
+                )
+            }
+            Target::Module(index) => {
+                let m = self
+                    .modules
+                    .get_or_insert_with(|| self.doc.module().summaries())
+                    .get(index)
+                    .ok_or_else(|| invalid("Module no longer exists"))?;
+                Ok(
+                    json!({"module_index":index,"base":m.base,"slot":m.slot,"id":m.id,"sub_type":m.sub_type,"name":m.name,"comment":m.comment,"details":m.details}),
+                )
+            }
+            Target::Contact(index, offset) => {
+                let summary = self
+                    .programs
+                    .get_or_insert_with(|| self.doc.program().programs())
+                    .get(index)
+                    .ok_or_else(|| invalid("Program no longer exists"))?;
+                let decoded = self
+                    .ladders
+                    .entry(index)
+                    .or_insert_with(|| {
+                        #[cfg(test)]
+                        {
+                            self.ladder_decode_count += 1;
+                        }
+                        self.doc.program().ladder_program(index).map(|result| {
+                            result
+                                .map(|program| {
+                                    let records = (program.project_type == Some(2))
+                                        .then(|| program.iec_record_frames())
+                                        .flatten();
+                                    DecodedContacts { program, records }
+                                })
+                                .map_err(|error| error.to_string())
+                        })
+                    })
+                    .as_ref()
+                    .ok_or_else(|| invalid("Program is not ladder"))?
+                    .as_ref()
+                    .map_err(invalid)?;
+                contact_snapshot(
+                    index,
+                    offset,
+                    summary,
+                    &decoded.program,
+                    decoded.records.as_deref(),
+                )
+            }
+        }
+    }
+}
+
 fn make_ref(path: &Path, rev: &str, target: &Target, snapshot: &Value) -> String {
     let fingerprint =
         revision(&serde_json::to_vec(&json!([path, rev, target.encode(), snapshot])).unwrap());
@@ -170,17 +274,25 @@ fn resolve(
 }
 /// Add references to supported objects in existing inspection/search shapes.
 pub fn annotate(doc: &XgwxDocument, path: &Path, rev: &str, data: &mut Value) {
-    fn walk(doc: &XgwxDocument, path: &Path, rev: &str, value: &mut Value) {
+    annotate_with_snapshots(&mut AnnotationSnapshots::new(doc), path, rev, data);
+}
+fn annotate_with_snapshots(
+    snapshots: &mut AnnotationSnapshots<'_>,
+    path: &Path,
+    rev: &str,
+    data: &mut Value,
+) {
+    fn walk(snapshots: &mut AnnotationSnapshots<'_>, path: &Path, rev: &str, value: &mut Value) {
         match value {
             Value::Array(values) => {
                 for v in values {
-                    walk(doc, path, rev, v);
+                    walk(snapshots, path, rev, v);
                 }
             }
             Value::Object(_) => {
                 // Recurse before adding refs, so attached symbol records cannot become contact refs.
                 for v in value.as_object_mut().unwrap().values_mut() {
-                    walk(doc, path, rev, v);
+                    walk(snapshots, path, rev, v);
                 }
                 let target = if value["kind"] == "contact" {
                     value["program_index"]
@@ -207,7 +319,7 @@ pub fn annotate(doc: &XgwxDocument, path: &Path, rev: &str, data: &mut Value) {
                     None
                 };
                 if let Some(target) = target
-                    && let Ok(observed) = snapshot(doc, &target)
+                    && let Ok(observed) = snapshots.snapshot(&target)
                 {
                     value["object_ref"] = json!(make_ref(path, rev, &target, &observed));
                 }
@@ -215,7 +327,7 @@ pub fn annotate(doc: &XgwxDocument, path: &Path, rev: &str, data: &mut Value) {
             _ => {}
         }
     }
-    walk(doc, path, rev, data);
+    walk(snapshots, path, rev, data);
 }
 
 #[derive(Clone, Deserialize, JsonSchema)]
@@ -454,6 +566,191 @@ impl PreparedChanges {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn fixture(name: &str) -> XgwxDocument {
+        XgwxDocument::from_path(
+            crate::test_support::fixture_root()
+                .join("fixtures")
+                .join(name),
+        )
+        .unwrap()
+    }
+    fn contact_targets(doc: &XgwxDocument, index: usize) -> Vec<Target> {
+        let program = doc.program().ladder_program(index).unwrap().unwrap();
+        if program.project_type == Some(2) {
+            program
+                .iec_record_frames()
+                .unwrap()
+                .iter()
+                .filter(|r| matches!(r.kind, IecRecordKind::Contact(_)))
+                .map(|r| Target::Contact(index, r.offset + 15))
+                .collect()
+        } else {
+            program
+                .structure
+                .rungs
+                .iter()
+                .flat_map(|r| &r.cells)
+                .filter(|c| c.contact.is_some())
+                .map(|c| Target::Contact(index, c.offset))
+                .collect()
+        }
+    }
+    fn contact_item(target: &Target) -> Value {
+        let Target::Contact(index, offset) = *target else {
+            panic!("contact target")
+        };
+        json!({"kind":"contact","program_index":index,"location":{"string_offset":offset},
+            "symbols":[{"scope":"local","program_index":index,"name":"kept","object_id":"symbol"}]})
+    }
+    #[test]
+    fn annotation_reuses_program_decodes_and_preserves_reference_snapshots() {
+        for name in [
+            "elements.xgwx",
+            "ladder-wire-delete/iec-horizontal-native.xgwx",
+        ] {
+            let doc = fixture(name);
+            let path = Path::new("/allowed/native.xgwx");
+            let rev = revision(&doc.to_verified_bytes().unwrap());
+            let targets = contact_targets(&doc, 0);
+            assert!(!targets.is_empty());
+            // Repeated objects and malformed offsets exercise the full recursive
+            // annotation path without permitting new references on symbol records.
+            let mut items = vec![];
+            for target in targets.iter().cycle().take(targets.len() * 3) {
+                let mut item = contact_item(target);
+                if let Ok(observed) = snapshot(&doc, target) {
+                    item["object_ref"] = json!(make_ref(path, &rev, target, &observed));
+                }
+                items.push(item);
+            }
+            let target = Target::Program(0);
+            let summary = snapshot(&doc, &target).unwrap();
+            let mut program = summary.clone();
+            program["object_ref"] = json!(make_ref(path, &rev, &target, &summary));
+            items.push(program);
+            items.push(contact_item(&Target::Contact(0, usize::MAX)));
+            items.push(contact_item(&Target::Contact(usize::MAX, 0)));
+            for index in 0..doc.module().summaries().len() {
+                let target = Target::Module(index);
+                let summary = snapshot(&doc, &target).unwrap();
+                let mut module = summary.clone();
+                module["input_filter_raw"] = Value::Null;
+                module["object_ref"] = json!(make_ref(path, &rev, &target, &summary));
+                items.push(module);
+            }
+            let expected = json!({"nested":{"items":items}});
+            let mut actual = expected.clone();
+            for item in actual["nested"]["items"].as_array_mut().unwrap() {
+                item.as_object_mut().unwrap().remove("object_ref");
+            }
+            let mut snapshots = AnnotationSnapshots::new(&doc);
+            annotate_with_snapshots(&mut snapshots, path, &rev, &mut actual);
+            assert_eq!(actual, expected, "{name}");
+            assert_eq!(snapshots.ladder_decode_count, 1, "{name}");
+            let mut public = actual.clone();
+            annotate(&doc, path, &rev, &mut public);
+            assert_eq!(public, expected);
+            assert_eq!(revision(&doc.to_verified_bytes().unwrap()), rev);
+        }
+    }
+    #[test]
+    fn annotation_caches_failed_decodes_and_keeps_ambiguity_guards() {
+        let doc = xgwx::create_project("XGI-CPUE", "ST").unwrap();
+        let mut data = json!([
+            contact_item(&Target::Contact(0, 15)),
+            contact_item(&Target::Contact(0, 30))
+        ]);
+        let original = data.clone();
+        let mut snapshots = AnnotationSnapshots::new(&doc);
+        annotate_with_snapshots(
+            &mut snapshots,
+            Path::new("/allowed/text.xgwx"),
+            "revision",
+            &mut data,
+        );
+        assert_eq!(data, original);
+        assert_eq!(snapshots.ladder_decode_count, 1);
+        assert!(snapshots.ladders[&0].as_ref().unwrap().is_err());
+
+        let doc = fixture("elements.xgwx");
+        let summary = &doc.program().programs()[0];
+        let mut program = doc.program().ladder_program(0).unwrap().unwrap();
+        let cell = program
+            .structure
+            .rungs
+            .iter()
+            .flat_map(|r| &r.cells)
+            .find(|c| c.contact.is_some())
+            .unwrap()
+            .clone();
+        program.structure.rungs[0].cells.push(cell.clone());
+        let error = contact_snapshot(0, cell.offset, summary, &program, None).unwrap_err();
+        assert_eq!(error.code, "invalid_object_ref");
+        assert_eq!(error.message, "Ambiguous XGK contact");
+        program.structure.rungs[0].cells.pop();
+        program.strings.clear();
+        let error = contact_snapshot(0, cell.offset, summary, &program, None).unwrap_err();
+        assert_eq!(error.code, "unsupported_target");
+        assert_eq!(error.message, "Contact has no editable operand string");
+
+        let doc = fixture("ladder-wire-delete/iec-horizontal-native.xgwx");
+        let summary = &doc.program().programs()[0];
+        let program = doc.program().ladder_program(0).unwrap().unwrap();
+        let mut records = program.iec_record_frames().unwrap();
+        let record = records
+            .iter()
+            .find(|r| matches!(r.kind, IecRecordKind::Contact(_)))
+            .unwrap()
+            .clone();
+        records.push(record.clone());
+        let error =
+            contact_snapshot(0, record.offset + 15, summary, &program, Some(&records)).unwrap_err();
+        assert_eq!(error.code, "invalid_object_ref");
+        assert_eq!(error.message, "Ambiguous IEC contact");
+    }
+    #[test]
+    fn annotation_decodes_each_selected_program_once() {
+        let mut doc = xgwx::create_project("XGK-CPUH", "LD").unwrap();
+        crate::operations::apply_operation(
+            &mut doc,
+            "create_program",
+            json!({"patch":{
+            "name":"Second","language":"LD",
+            "object_id":"abcdef01-1234-4567-89ab-0123456789ab",
+            "symbol_id":"abcdef02-1234-4567-89ab-0123456789ab"}}),
+        )
+        .unwrap();
+        for index in 0..2 {
+            crate::operations::apply_operation(
+                &mut doc,
+                "edit_ladder_cell",
+                json!({
+                "program_index":index,"edit":{"raw_y":0,"column":0,"expected":null,
+                "replacement":{"kind":"NormallyOpen","operand":"M00000"}}}),
+            )
+            .unwrap();
+        }
+        let mut items = vec![];
+        for index in 0..2 {
+            let target = contact_targets(&doc, index).remove(0);
+            items.extend((0..5).map(|_| contact_item(&target)));
+        }
+        let mut data = json!(items);
+        let mut snapshots = AnnotationSnapshots::new(&doc);
+        annotate_with_snapshots(
+            &mut snapshots,
+            Path::new("/allowed/two.xgwx"),
+            "revision",
+            &mut data,
+        );
+        assert_eq!(snapshots.ladder_decode_count, 2);
+        assert!(
+            data.as_array()
+                .unwrap()
+                .iter()
+                .all(|item| item["object_ref"].is_string())
+        );
+    }
     #[test]
     fn candidate_drift_and_expiration_fail_without_replacing_source() {
         let dir = tempfile::tempdir().unwrap();

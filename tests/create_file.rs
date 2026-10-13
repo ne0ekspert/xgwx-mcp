@@ -62,6 +62,8 @@ fn create_all_templates_preview_atomic_save_then_existing_edit_backup() {
         ("xgk.xgwx", ProjectTemplate::XgkLd),
         ("xgi.xgwx", ProjectTemplate::XgiLd),
         ("sfc.xgwx", ProjectTemplate::XgiSfc),
+        ("st.xgwx", ProjectTemplate::XgiSt),
+        ("il.xgwx", ProjectTemplate::XgiIl),
     ] {
         let count = fs::read_dir(dir.path()).unwrap().count();
         let preview = store.create_file(name, template, None, &[], true).unwrap();
@@ -71,11 +73,13 @@ fn create_all_templates_preview_atomic_save_then_existing_edit_backup() {
         let saved = store.create_file(name, template, None, &[], false).unwrap();
         assert_eq!(saved["created"], true);
         assert_eq!(saved["revision_after"], preview["revision_after"]);
+        assert_eq!(saved["validation"], preview["validation"]);
         assert!(saved["revision_before"].is_null());
         assert!(saved["backup_path"].is_null());
         let bytes = fs::read(dir.path().join(name)).unwrap();
         assert_eq!(revision(&bytes), saved["revision_after"].as_str().unwrap());
         let doc = XgwxDocument::parse(&bytes).unwrap();
+        assert_eq!(saved["validation"], xgwx_mcp::inspection::validate(&doc));
         assert_eq!(doc.project().info().name.as_deref(), Some("NewProject"));
         doc.to_verified_bytes().unwrap();
         #[cfg(unix)]
@@ -113,6 +117,22 @@ fn create_all_templates_preview_atomic_save_then_existing_edit_backup() {
             fs::read(edit["backup_path"].as_str().unwrap()).unwrap(),
             bytes
         );
+        let edited = XgwxDocument::from_path(dir.path().join(name)).unwrap();
+        assert_eq!(edit["validation"], xgwx_mcp::inspection::validate(&edited));
+        let noop = store
+            .apply(
+                name,
+                edit["revision_after"].as_str().unwrap(),
+                &[op(
+                    "update_program",
+                    json!({"program_index":0,"patch":{"comment":"New file edited"}}),
+                )],
+                false,
+            )
+            .unwrap();
+        assert_eq!(noop["changed"], false);
+        assert_eq!(noop["backup_path"], Value::Null);
+        assert_eq!(noop["validation"], edit["validation"]);
     }
 }
 #[test]
