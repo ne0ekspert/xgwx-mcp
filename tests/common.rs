@@ -376,7 +376,7 @@ async fn stdio_references_common_tools_preview_commit_and_recovery() {
             .with_arguments(args.as_object().unwrap().clone())
     };
     let tools = client.list_all_tools().await.unwrap();
-    for name in ["prepare_change", "search_project"] {
+    for (name, read_only) in [("prepare_change", false), ("search_project", true)] {
         assert_eq!(
             tools
                 .iter()
@@ -386,7 +386,7 @@ async fn stdio_references_common_tools_preview_commit_and_recovery() {
                 .as_ref()
                 .unwrap()
                 .read_only_hint,
-            Some(true)
+            Some(read_only)
         );
     }
     let inspected = client

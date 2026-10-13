@@ -10,6 +10,76 @@ use std::fs;
 use test_support::fixture_root;
 
 #[tokio::test]
+async fn all_tools_declare_four_boolean_behavior_hints() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_xgwx-mcp"));
+    command.current_dir(dir.path());
+    let client = ClientConfig::default()
+        .serve(TokioChildProcess::new(command).unwrap())
+        .await
+        .unwrap();
+    let tools = client.list_all_tools().await.unwrap();
+    assert!(!tools.is_empty());
+    for tool in tools {
+        // Check the serialized discovery contract, including presence and type.
+        let value = serde_json::to_value(&tool).unwrap();
+        let annotations = &value["annotations"];
+        for hint in [
+            "readOnlyHint",
+            "destructiveHint",
+            "idempotentHint",
+            "openWorldHint",
+        ] {
+            assert!(
+                annotations[hint].is_boolean(),
+                "{}: {hint} must be an explicit boolean",
+                tool.name
+            );
+        }
+        let (read_only, destructive, idempotent) = match tool.name.as_ref() {
+            "list_templates"
+            | "inspect_file"
+            | "search_project"
+            | "list_modules"
+            | "list_module_catalog"
+            | "list_networks"
+            | "list_variables"
+            | "list_operations"
+            | "describe_operation"
+            | "get_ir"
+            | "validate_file" => (true, false, true),
+            // Creation never overwrites; preparation allocates a new session token.
+            "create_file" | "prepare_change" => (false, false, false),
+            // Backups and dry-run options do not make these tools read-only or additive.
+            "rename_program" | "commit_change" | "apply_edits" | "apply_patch" => {
+                (false, true, false)
+            }
+            name => panic!("Classify the behavior hints for new tool {name}"),
+        };
+        assert_eq!(
+            annotations["readOnlyHint"],
+            json!(read_only),
+            "{}",
+            tool.name
+        );
+        assert_eq!(
+            annotations["destructiveHint"],
+            json!(destructive),
+            "{}",
+            tool.name
+        );
+        assert_eq!(
+            annotations["idempotentHint"],
+            json!(idempotent),
+            "{}",
+            tool.name
+        );
+        assert_eq!(annotations["openWorldHint"], json!(false), "{}", tool.name);
+    }
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
 async fn real_stdio_inspection_schema_dry_run_edit_and_validation() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("project.xgwx");

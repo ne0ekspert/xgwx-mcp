@@ -235,7 +235,12 @@ async fn blocking(
 impl XgwxServer {
     #[tool(
         description = "List library-generated blank project profiles, their default names/CPU, generated hashes and CPU models selectable under existing library guards. No project file is required.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     fn list_templates(&self) -> CallToolResult {
         result(crate::templates::list())
@@ -272,7 +277,12 @@ impl XgwxServer {
 
     #[tool(
         description = "Inspect an XGWX file and obtain its SHA-256 revision, stable identities, decoded coordinates, symbols, catalogs and edit sites. Paginate details; inspect again after structural edits.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn inspect_file(
         &self,
@@ -303,7 +313,12 @@ impl XgwxServer {
 
     #[tool(
         description = "Search decoded objects inside an existing XGWX project by literal name, address, description, operand, instruction mnemonic or comment. Returns revision-scoped program and native ladder locations, matched fields, linked symbols, one paginated result list and explicit decode/coverage limitations. Optional kind/program filters; global variables remain included. No filesystem discovery. Pass expected_revision on subsequent pages to reject changed snapshots. SFC/ST/IL bodies and declarations are not covered; search does not certify editability.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn search_project(
         &self,
@@ -333,7 +348,8 @@ impl XgwxServer {
         description = "Rename one program using its object_ref from search_project or inspect_file. Derives identity/revision guards and saves one verified transaction with backup. dry_run returns before/after values without saving. Use prepare_change for a reusable preview token.",
         annotations(
             read_only_hint = false,
-            destructive_hint = false,
+            destructive_hint = true,
+            idempotent_hint = false,
             open_world_hint = false
         )
     )]
@@ -357,7 +373,12 @@ impl XgwxServer {
     }
     #[tool(
         description = "Prepare 1–128 common changes as one verified dry-run transaction. Each change uses an inspected object_ref. Returns readable target/field/before/after values, validation, exact candidate hash and a session-scoped change_token lasting 30 minutes. Creates no files or sidecars; does not save. Review the result then call commit_change with the token.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
     )]
     async fn prepare_change(
         &self,
@@ -377,7 +398,8 @@ impl XgwxServer {
         description = "Commit the exact candidate from prepare_change using only its change_token. Rejects stale source revisions, expired/unknown tokens and candidate drift. Saves atomically with the original-file backup and consumes the token after success. Local verification does not establish native XG5000 acceptance.",
         annotations(
             read_only_hint = false,
-            destructive_hint = false,
+            destructive_hint = true,
+            idempotent_hint = false,
             open_world_hint = false
         )
     )]
@@ -398,7 +420,12 @@ impl XgwxServer {
 
     #[tool(
         description = "List installed modules with base/slot identities, settings, CPU and rack context. Use list_module_catalog for available models; replacements still obey library CPU/layout guards. Returns current revision and paginated arrays.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn list_modules(
         &self,
@@ -414,7 +441,12 @@ impl XgwxServer {
     }
     #[tool(
         description = "Search the available module catalog without a project file. Returns paginated model identities, defaults, writable option choices and known support status. Catalog presence does not establish compatibility with every CPU or layout.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     fn list_module_catalog(
         &self,
@@ -428,7 +460,12 @@ impl XgwxServer {
     }
     #[tool(
         description = "List configured networks, linked module identities and decoded Cnet/FEnet settings with the current file revision. Pagination applies independently to nested arrays. Use get_ir section networks for guarded property edits.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn list_networks(
         &self,
@@ -445,7 +482,12 @@ impl XgwxServer {
     }
     #[tool(
         description = "List global and IEC program-local variables with names, types, addresses, descriptions and revision-scoped indices. Optional program_index selects one local table; globals remain included. SFC declarations remain in inspect_file section sfc.variables; ST/IL declarations use text.variables. Pagination applies independently to tables.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn list_variables(
         &self,
@@ -469,7 +511,12 @@ impl XgwxServer {
 
     #[tool(
         description = "Discover public editing operations by subsystem or search text. Use describe_operation for the exact typed argument schema before editing.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     fn list_operations(&self, Parameters(request): Parameters<ListRequest>) -> CallToolResult {
         CallToolResult::structured(operations::list_operations(
@@ -480,7 +527,12 @@ impl XgwxServer {
 
     #[tool(
         description = "Get the exact JSON argument schema, constraints, required inspection data, and example argument template for a public libxgwx writer operation.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     fn describe_operation(
         &self,
@@ -516,7 +568,12 @@ impl XgwxServer {
 
     #[tool(
         description = "Export revision-scoped text. section modules/variables/networks provides property documents with edit/readonly fields; section program requires program_index and exports an XGK/IEC ladder, SFC or standalone ST/IL program. Includes contacts, coils, native rung/output comments, symbol descriptions, catalog XGK instructions, bound IEC function operands and captured arithmetic/comparison names, native coordinates, physical wires and read-only derived circuit connections. Use an exact unified diff with apply_patch. Positions and identities are scoped to this revision.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_ir(&self, Parameters(request): Parameters<IrRequest>) -> CallToolResult {
         let store = self.store.clone();
@@ -587,7 +644,12 @@ impl XgwxServer {
 
     #[tool(
         description = "Validate container serialization and obtain available decoded program diagnostics. Local results do not establish native XG5000 Open/Check Program/Save As acceptance or PLC behavior.",
-        annotations(read_only_hint = true, open_world_hint = false)
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn validate_file(&self, Parameters(request): Parameters<FileRequest>) -> CallToolResult {
         let store = self.store.clone();
