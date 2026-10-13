@@ -26,6 +26,10 @@ against the published dependency, set `LIBXGWX_TEST_ROOT` to a libxgwx repositor
 checkout containing `fixtures/`, then run `cargo test --locked`. This selects test
 data only; source audits still use the compiled dependency. The same environment
 variable supplies fixtures to Python instruction-guide tests.
+Run `cargo fetch --locked` before these tests to cache dependencies for all
+platforms: the offline Cargo metadata queries also resolve packages that the
+host's build does not compile. CI fetches those dependencies and checks out
+fixtures at the published library's source revision.
 
 MCP uses the current namespaced library API by default; no opt-in feature is
 required. `Cargo.toml` specifies the library version requirement, and `Cargo.lock`

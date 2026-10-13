@@ -16,6 +16,8 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      LIBXGWX_TEST_ROOT: ${{ github.workspace }}/libxgwx-fixtures
     defaults:
       run:
         working-directory: xgwx-mcp
@@ -24,6 +26,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: xgwx-mcp
+      # The published library omits fixtures. Keep test data separate from
+      # the crates.io dependency, pinned to the release's source revision.
+      - name: Check out libxgwx test fixtures
+        uses: actions/checkout@v4
+        with:
+          repository: ne0ekspert/libxgwx
+          ref: e0ae840f17ee6147c46b6bef62f8cd454609e460
+          path: libxgwx-fixtures
+          sparse-checkout: fixtures
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -32,6 +43,10 @@ jobs:
           python-version: '3.12'
       - name: Check Rust formatting
         run: cargo fmt --check
+      # Offline metadata resolves all platforms, including dependencies that
+      # cargo test on Linux does not download or compile.
+      - name: Fetch locked dependencies for offline metadata
+        run: cargo fetch --locked
       - name: Run Rust and stdio integration tests
         run: cargo test --locked
       - name: Check instruction guides and source metadata
