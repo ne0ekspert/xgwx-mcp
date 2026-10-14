@@ -167,7 +167,7 @@ Edit only a function's quoted `name`, or an argument's quoted `value`. Names can
 
 Bound operand edits use `update_iec_ld_function_operand` with native type compatibility, sibling scalar-type compatibility, expression and writable-output checks. Consult `inspect_file` sections `program.functions`, `program.operand_links` and `symbols` when choosing operands; the XGK instruction manual does not define IEC function semantics. A rejected compound expression must not be rewritten as raw bytes.
 
-Empty argument text is rejected by text patches because the underlying writer treats it as structural output deletion. Discover `delete_iec_ld_function_output_operand` for that explicit workflow and re-export afterward. Function/argument creation, deletion, movement and pin rebinding remain direct-operation workflows. Deleting a statement never implicitly deletes a function or clears a pin.
+Set an existing OUTPUT argument value to `""` to request guarded native output-operand deletion. This must be the sole mutation; re-export afterward. Empty INPUT arguments are rejected. Function/argument creation, deletion, movement and pin rebinding remain direct-operation workflows. Deleting a statement never implicitly deletes a function or clears a pin.
 
 ## Physical wires
 
@@ -204,3 +204,80 @@ Delete an XGK rung comment by removing its statement, retaining the block wrappe
 Existing positions, object families, program/rung identities, unknown instruction records, function signatures and pin bindings, derived `connection` statements and opaque records are read-only in v1. Supported element creation/deletion can cause the library to update feed wiring; export again to inspect the resulting native topology. Unknown payloads stay in the original document; patches never rebuild a project from text. Unsupported changes return `unsupported_ir_edit`; syntax/context/count errors return `invalid_patch`; writer failures retain the underlying reason and operation index. Stale requests require a new export and a rebuilt patch.
 
 Successful local verification establishes container serialization and available program diagnostics. Native acceptance still requires XG5000 Open → Check Program → Save As → comparison. The server does not perform that external sequence or communicate with a PLC.
+
+## Blank rows and rung lifecycle
+
+Apply exactly one lifecycle mutation per program patch, keeping all other IR
+statements unchanged. Save and re-export before editing shifted positions.
+
+IEC blank rows are gaps in the native row index, rather than decoded row records.
+Insert a blank after a current row:
+
+```text
+  blank_row @new-space after row 0
+```
+
+Create a contact-to-coil rung in an unoccupied IEC row (row 0 on an empty canvas):
+
+```text
+  rung_row @new-enable at row 1 contact NO "%MX0" coil OUT "%MX1"
+```
+
+Contact kinds are `NO`, `NC`, `RISING`, `FALLING`, `NEGATED_RISING`, and
+`NEGATED_FALLING`. Coil kinds are `OUT`, `INVERSE`, `SET`, `RESET`, `RISING`, and
+`FALLING`. Native variable, writable-coil and captured-layout validation applies.
+
+Remove an exported `rung_row @pN.rungR at row R` marker to delete that captured
+simple rung; retain its body statements in this transaction. The marker captures
+native kinds and operands, and is exported only when the native writer can delete
+the rung. The next export removes its body and displays the resulting blank.
+Remove an exported writable `blank_row @pN.blankR at row R` marker to close that
+blank and shift subsequent rows. First and trailing blanks are readonly. Deletion
+of the only rung, branches, or function rungs is not covered by these markers.
+
+For XGK, insert a blank before a native Y position:
+
+```text
+  blank_row @new-space before y 0
+```
+
+The writer shifts subsequent native cells, wires and comments. General XGK rung
+deletion remains outside this IR coverage. New lifecycle identities must start
+with `@new-`; existing markers and their coordinates cannot be rewritten. Direct
+blank-row and simple IEC rung tools are replaced by these program patches.
+
+## IEC insertion sites and wire repair
+
+The export includes readonly `contact_site` statements for native `LEADING`,
+`WIRE`, and `SHORT_WIRE` insertion sites, `parallel_site` statements for captured
+normally-open-contact/output-coil rungs with available branch space, and
+`wire_gap` statements for repairable horizontal gaps. Site identities capture
+native offsets, expected geometry and current operands. A missing site cannot
+be supplied by inventing an identity or changing readonly metadata.
+
+Add one authoring statement directly inside the program block, retaining all
+existing statements unchanged:
+
+```text
+  contact_insert @new-interlock site @p0.contactwire123 kind NC operand "%MX10" x 7
+  contact_insert @new-leading site @p0.leading123 kind NO operand "%MX10"
+  contact_insert @new-refill site @p0.shortwire123 kind RISING operand "%MX10"
+  parallel_contact @new-parallel site @p0.parallel0 kind NC operand "%MX11"
+  wire_restore @new-repair site @p0.wiregap123
+  comment_row @new-note at row 3 text "Enable circuit"
+```
+
+Each line above is a separate patch example. Copy an actual exported site ID;
+`123` is illustrative. Only `WIRE` contact sites accept `x N`, on the captured
+three-cell grid inside their span. Leading and short-wire sites retain their
+fixed native cells. Contact kinds use the rung contact names listed above.
+Native BOOL operand and layout checks remain authoritative. After saving,
+re-export to obtain the inserted element and updated site identities.
+
+`comment_row` copies a captured singleton native comment group into a supported
+destination row and changes its text. It requires an existing comment template;
+it cannot create the first comment in an empty project. Text must be nonempty
+without control characters. Adding a comment does not insert a blank row.
+
+General function/group replacement, output-pin wiring and assignment, Cell Delete
+variants, and specialized branch/heating deletions retain direct gap tools.

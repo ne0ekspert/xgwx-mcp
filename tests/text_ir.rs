@@ -1022,14 +1022,12 @@ fn malformed_strings_coordinates_and_duplicate_or_nested_identities_fail() {
         assert!(ir.lower_patch(&patch).is_err(), "{patch}");
     }
 }
-#[test]
-fn iec_native_comment_text_uses_the_comment_string_source_mapping() {
+fn captured_iec_comment_fixture(mut doc: XgwxDocument) -> XgwxDocument {
     // Fixture-derived native record: change a captured contact into the known
     // comment grammar, including its trailing eight-byte envelope. This is a
     // test input only; production patches never rewrite binary records.
     use base64::Engine;
     use std::io::Write;
-    let mut doc = fixture("ladder-wire-delete/iec-horizontal-native.xgwx");
     let program = doc.program().ladder_program(0).unwrap().unwrap();
     let record = program
         .iec_record_frames()
@@ -1070,6 +1068,12 @@ fn iec_native_comment_text_uses_the_comment_string_source_mapping() {
         doc.program().ladder_program(0).unwrap().unwrap().data[record.offset + 1],
         0x3f
     );
+    doc
+}
+#[test]
+fn iec_native_comment_text_uses_the_comment_string_source_mapping() {
+    let doc =
+        captured_iec_comment_fixture(fixture("ladder-wire-delete/iec-horizontal-native.xgwx"));
     let ir = Projection::export(&doc, "revision", 0).unwrap();
     let old = ir
         .text
@@ -1915,8 +1919,8 @@ fn iec_function_metadata_deletion_rebinding_and_invalid_types_fail_atomically() 
             &argument.replace("direction INPUT", "direction OUTPUT"),
         ),
         ir.text.replace(
-            output,
-            &format!("{} value \"\"", output.split(" value ").next().unwrap()),
+            argument,
+            &format!("{} value \"\"", argument.split(" value ").next().unwrap()),
         ),
         ir.text.replace(
             function,
@@ -2541,17 +2545,26 @@ fn sfc_patch_rejects_structure_metadata_and_rolls_back_native_failures() {
         .lines()
         .find(|l| l.trim_start().starts_with("sfc_variable "))
         .unwrap();
+    let renamed = ir
+        .text
+        .replace(variable, &variable.replace("name ", "renamed "));
+    assert!(ir.lower_patch(&full_patch(&ir.text, &renamed)).is_err());
     for edited in [
         ir.text
             .replace(row, &row.replace("kind \"continuation\"", "kind \"step\"")),
-        ir.text
-            .replace(variable, &variable.replace("name ", "renamed ")),
         ir.text.replace(
             row,
             &row.replace("position none", "position \"row=999,column=1\""),
         ),
     ] {
-        assert!(ir.lower_patch(&full_patch(&ir.text, &edited)).is_err());
+        assert_eq!(
+            store
+                .apply_patch("p.xgwx", &rev, 0, &full_patch(&ir.text, &edited), false)
+                .unwrap_err()
+                .code,
+            "operation_failed"
+        );
+        assert_eq!(fs::read(dir.path().join("p.xgwx")).unwrap(), bytes);
     }
     let changed = ir
         .text
@@ -2866,11 +2879,17 @@ fn sfc_structural_patches_reject_branch_edits_forged_ids_and_native_invalid_rows
         .lines()
         .find(|l| l.trim_start().starts_with("sfc_row "))
         .unwrap();
-    assert_eq!(
-        ir.lower_patch(&full_patch(&ir.text, &remove_line(&ir.text, row)))
-            .unwrap_err()
-            .code,
-        "unsupported_ir_edit"
+    let ops = ir
+        .lower_patch(&full_patch(&ir.text, &remove_line(&ir.text, row)))
+        .unwrap();
+    let mut candidate = doc.clone();
+    assert!(
+        xgwx_mcp::operations::apply_operation(
+            &mut candidate,
+            "replace_sfc_sequence",
+            ops[0].args.clone()
+        )
+        .is_err()
     );
     let doc = fixture("sfc/native-loop.xgwx");
     let bytes = doc.to_verified_bytes().unwrap();
@@ -2881,10 +2900,7 @@ fn sfc_structural_patches_reject_branch_edits_forged_ids_and_native_invalid_rows
         .lines()
         .find(|l| l.trim_start().starts_with("chart "))
         .unwrap();
-    for (id, kind, title) in [
-        ("@p0.forged", "step", "Extra"),
-        ("@new-branch", "parallel_split", ""),
-    ] {
+    for (id, kind, title) in [("@p0.forged", "step", "Extra")] {
         let edited = ir.text.replace(
             chart,
             &format!("{chart}\n{}", sfc_author_row(id, kind, title, false)),
@@ -2901,13 +2917,6 @@ fn sfc_structural_patches_reject_branch_edits_forged_ids_and_native_invalid_rows
             chart,
             &format!("{chart}\n{}", authored.replace(" comment \"\"", "")),
         ),
-        ir.text.replace(
-            chart,
-            &format!(
-                "{chart}\n{}",
-                authored.replace("position none", "position \"row=1,column=1\"")
-            ),
-        ),
     ] {
         assert!(ir.lower_patch(&full_patch(&ir.text, &edited)).is_err());
     }
@@ -2916,6 +2925,9 @@ fn sfc_structural_patches_reject_branch_edits_forged_ids_and_native_invalid_rows
     let store = FileStore::new(dir.path().into(), vec![]).unwrap();
     for row in [
         sfc_author_row("@new-bad", "transition", "%MW2", false),
+        sfc_author_row("@new-branch", "parallel_split", "", false),
+        sfc_author_row("@new-position", "step", "Positioned", false)
+            .replace("position none", "position \"row=1,column=1\""),
         sfc_author_row("@new-initial", "step", "AnotherInitial", true),
         sfc_author_row("@new-missing", "jump", "MissingLabel", false),
     ] {
@@ -2938,4 +2950,674 @@ fn sfc_structural_patches_reject_branch_edits_forged_ids_and_native_invalid_rows
         .text
         .replace(row, &row.replace(" title ", " missing_title "));
     assert!(ir.lower_patch(&full_patch(&ir.text, &malformed)).is_err());
+}
+
+#[test]
+fn iec_output_clear_uses_guarded_writer_and_requires_reexport() {
+    let doc = fixture("function-output-wires/base.xgwx");
+    let bytes = doc.to_verified_bytes().unwrap();
+    let rev = revision(&bytes);
+    let ir = Projection::export(&doc, &rev, 0).unwrap();
+    let output = ir
+        .text
+        .lines()
+        .find(|l| l.trim_start().starts_with("argument ") && l.contains("direction OUTPUT"))
+        .unwrap();
+    let cleared = format!("{} value \"\"", output.split(" value ").next().unwrap());
+    let patch = replace_patch(&ir.text, output, &cleared);
+    let ops = ir.lower_patch(&patch).unwrap();
+    assert_eq!(ops.len(), 1);
+    assert_eq!(ops[0].name, "update_iec_ld_function_operand");
+    let mut expected = doc.clone();
+    apply(&mut expected, &ops[0].name, ops[0].args.clone());
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("p.xgwx"), &bytes).unwrap();
+    let store = FileStore::new(dir.path().into(), vec![]).unwrap();
+    store.apply_patch("p.xgwx", &rev, 0, &patch, true).unwrap();
+    assert_eq!(fs::read(dir.path().join("p.xgwx")).unwrap(), bytes);
+    store.apply_patch("p.xgwx", &rev, 0, &patch, false).unwrap();
+    assert_eq!(
+        fs::read(dir.path().join("p.xgwx")).unwrap(),
+        expected.to_verified_bytes().unwrap()
+    );
+    assert_eq!(
+        store
+            .apply_patch("p.xgwx", &rev, 0, &patch, false)
+            .unwrap_err()
+            .code,
+        "stale_revision"
+    );
+    let function = ir
+        .text
+        .lines()
+        .find(|l| l.trim_start().starts_with("function ") && l.contains("name \"ADD\""))
+        .unwrap();
+    let changed = ir
+        .text
+        .replace(output, &cleared)
+        .replace(function, &function.replace("name \"ADD\"", "name \"SUB\""));
+    assert_eq!(
+        ir.lower_patch(&full_patch(&ir.text, &changed))
+            .unwrap_err()
+            .code,
+        "unsupported_ir_edit"
+    );
+}
+
+#[test]
+fn sfc_positioned_branch_can_add_a_balanced_path_and_reject_bad_endpoint() {
+    let doc = fixture("sfc/multi-action-branch-native.xgwx");
+    let bytes = doc.to_verified_bytes().unwrap();
+    let rev = revision(&bytes);
+    let ir = Projection::export(&doc, &rev, 0).unwrap();
+    let mut edited = ir.text.replace("branch_end 2", "branch_end 4");
+    for (i, line) in ir
+        .text
+        .lines()
+        .filter(|l| l.trim_start().starts_with("sfc_row ") && l.contains("column=2\""))
+        .enumerate()
+    {
+        let id = line.split_whitespace().nth(1).unwrap();
+        let new = line
+            .replace(id, &format!("@new-path{i}"))
+            .replace("column=2", "column=4")
+            .replace("title \"S2\"", "title \"S3\"");
+        edited = edited.replace(line, &format!("{line}\n{new}"));
+    }
+    let ops = ir.lower_patch(&full_patch(&ir.text, &edited)).unwrap();
+    assert_eq!(ops.len(), 1);
+    let mut expected = doc.clone();
+    apply(&mut expected, &ops[0].name, ops[0].args.clone());
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("p.xgwx"), &bytes).unwrap();
+    let store = FileStore::new(dir.path().into(), vec![]).unwrap();
+    let bad = edited.replace("branch_end 4", "branch_end 3");
+    assert_eq!(
+        store
+            .apply_patch("p.xgwx", &rev, 0, &full_patch(&ir.text, &bad), false)
+            .unwrap_err()
+            .code,
+        "operation_failed"
+    );
+    assert_eq!(fs::read(dir.path().join("p.xgwx")).unwrap(), bytes);
+    store
+        .apply_patch("p.xgwx", &rev, 0, &full_patch(&ir.text, &edited), true)
+        .unwrap();
+    assert_eq!(fs::read(dir.path().join("p.xgwx")).unwrap(), bytes);
+    store
+        .apply_patch("p.xgwx", &rev, 0, &full_patch(&ir.text, &edited), false)
+        .unwrap();
+    let saved = XgwxDocument::from_path(dir.path().join("p.xgwx")).unwrap();
+    assert_eq!(
+        saved.variable().sfc_variables(0).unwrap(),
+        doc.variable().sfc_variables(0).unwrap()
+    );
+    assert_eq!(
+        saved.to_verified_bytes().unwrap(),
+        expected.to_verified_bytes().unwrap()
+    );
+    assert!(
+        saved.program().sfc_programs()[0].blocks[0]
+            .editable_rows
+            .as_ref()
+            .unwrap()
+            .iter()
+            .any(|r| r.title == "S3")
+    );
+}
+
+#[test]
+fn sfc_declaration_create_update_bounds_initializer_retain_and_remove() {
+    let mut doc = fixture("sfc/new-xgi-sfc.xgwx");
+    let dir = tempfile::tempdir().unwrap();
+    let store = FileStore::new(dir.path().into(), vec![]).unwrap();
+    let quote = |v: &str| serde_json::to_string(v).unwrap();
+    for stage in 0..3 {
+        let bytes = doc.to_verified_bytes().unwrap();
+        let rev = revision(&bytes);
+        fs::write(dir.path().join("p.xgwx"), &bytes).unwrap();
+        let ir = Projection::export(&doc, &rev, 0).unwrap();
+        let edited = match stage {
+            0 => {
+                let program = ir.text.lines().find(|l| l.starts_with("program ")).unwrap();
+                let declaration = quote(r#"{"dimensions":[],"initial_value":"1","retain":false}"#);
+                ir.text.replace(program, &format!("{program}\n  sfc_variable @new-counter name \"Counter\" type \"INT\" system false declaration {declaration} description \"Count items\""))
+            }
+            1 => {
+                let line = ir
+                    .text
+                    .lines()
+                    .find(|l| {
+                        l.trim_start().starts_with("sfc_variable ")
+                            && l.contains("name \"Counter\"")
+                    })
+                    .unwrap();
+                let prefix = line
+                    .split(" declaration ")
+                    .next()
+                    .unwrap()
+                    .replace("type \"INT\"", "type \"DINT\"");
+                let declaration = quote(
+                    r#"{"dimensions":[{"lower":0,"upper":2}],"initial_value":"2,3,4","retain":true}"#,
+                );
+                ir.text.replace(
+                    line,
+                    &format!("{prefix} declaration {declaration} description \"Array count\""),
+                )
+            }
+            _ => {
+                let line = ir
+                    .text
+                    .lines()
+                    .find(|l| {
+                        l.trim_start().starts_with("sfc_variable ")
+                            && l.contains("name \"Counter\"")
+                    })
+                    .unwrap();
+                remove_line(&ir.text, line)
+            }
+        };
+        let patch = full_patch(&ir.text, &edited);
+        let ops = ir.lower_patch(&patch).unwrap();
+        assert_eq!(ops.len(), 1);
+        let mut expected = doc.clone();
+        apply(&mut expected, &ops[0].name, ops[0].args.clone());
+        store.apply_patch("p.xgwx", &rev, 0, &patch, true).unwrap();
+        assert_eq!(fs::read(dir.path().join("p.xgwx")).unwrap(), bytes);
+        store.apply_patch("p.xgwx", &rev, 0, &patch, false).unwrap();
+        doc = XgwxDocument::from_path(dir.path().join("p.xgwx")).unwrap();
+        assert_eq!(
+            doc.to_verified_bytes().unwrap(),
+            expected.to_verified_bytes().unwrap()
+        );
+        let variables = doc.variable().sfc_variables(0).unwrap();
+        if stage == 1 {
+            let v = variables.iter().find(|v| v.name == "Counter").unwrap();
+            assert_eq!(v.data_type, "DINT");
+            let d = v.declaration.as_ref().unwrap();
+            assert!(d.retain);
+            assert_eq!(d.dimensions[0].upper, 2);
+        } else if stage == 2 {
+            assert!(!variables.iter().any(|v| v.name == "Counter"));
+        }
+    }
+}
+
+#[test]
+fn sfc_referenced_and_system_declarations_retain_native_guards() {
+    let doc = fixture("sfc/multi-action-branch-native.xgwx");
+    let bytes = doc.to_verified_bytes().unwrap();
+    let rev = revision(&bytes);
+    let ir = Projection::export(&doc, &rev, 0).unwrap();
+    let variable = ir
+        .text
+        .lines()
+        .find(|l| l.trim_start().starts_with("sfc_variable ") && l.contains("name \"Value_BOOL\""))
+        .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("p.xgwx"), &bytes).unwrap();
+    let store = FileStore::new(dir.path().into(), vec![]).unwrap();
+    for changed in [
+        remove_line(&ir.text, variable),
+        ir.text
+            .replace(variable, &variable.replace("type \"BOOL\"", "type \"INT\"")),
+    ] {
+        assert_eq!(
+            store
+                .apply_patch("p.xgwx", &rev, 0, &full_patch(&ir.text, &changed), false)
+                .unwrap_err()
+                .code,
+            "operation_failed"
+        );
+        assert_eq!(fs::read(dir.path().join("p.xgwx")).unwrap(), bytes);
+        assert!(!fs::read_dir(dir.path()).unwrap().any(|entry| {
+            entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .contains("backup")
+        }));
+    }
+    let system = ir
+        .text
+        .lines()
+        .find(|l| l.trim_start().starts_with("sfc_variable ") && l.contains("system true"))
+        .unwrap();
+    let changed = ir.text.replace(
+        system,
+        &format!(
+            "{} description \"Changed\"",
+            system.split(" description ").next().unwrap()
+        ),
+    );
+    assert_eq!(
+        ir.lower_patch(&full_patch(&ir.text, &changed))
+            .unwrap_err()
+            .code,
+        "unsupported_ir_edit"
+    );
+}
+
+fn row_edit(doc: &mut XgwxDocument, statement: &str) {
+    let ir = Projection::export(doc, "revision", 0).unwrap();
+    let mut after = ir.text.clone();
+    after.truncate(after.len() - 2);
+    after.push_str(statement);
+    after.push_str("\n}\n");
+    let ops = ir.lower_patch(&full_patch(&ir.text, &after)).unwrap();
+    assert_eq!(ops.len(), 1);
+    xgwx_mcp::operations::apply_operation(doc, &ops[0].name, ops[0].args.clone()).unwrap();
+    *doc = XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap();
+}
+#[test]
+fn iec_row_and_rung_lifecycle_roundtrip() {
+    let mut doc = fixture("empty-projects/new-xgi.xgwx");
+    row_edit(
+        &mut doc,
+        "  rung_row @new-first at row 0 contact NO \"%MX0\" coil OUT \"%MX1\"",
+    );
+    row_edit(&mut doc, "  blank_row @new-space after row 0");
+    row_edit(
+        &mut doc,
+        "  rung_row @new-second at row 1 contact NC \"%MX2\" coil SET \"%MX3\"",
+    );
+    row_edit(&mut doc, "  blank_row @new-space after row 1");
+    row_edit(
+        &mut doc,
+        "  rung_row @new-third at row 2 contact RISING \"%MX4\" coil RESET \"%MX5\"",
+    );
+    let ir = Projection::export(&doc, "revision", 0).unwrap();
+    assert!(ir.text.contains("  rung_row @p0.rung1 at row 1\n"));
+    let after = ir.text.replace("  rung_row @p0.rung1 at row 1\n", "");
+    let ops = ir.lower_patch(&full_patch(&ir.text, &after)).unwrap();
+    xgwx_mcp::operations::apply_operation(&mut doc, &ops[0].name, ops[0].args.clone()).unwrap();
+    let ir = Projection::export(&doc, "revision", 0).unwrap();
+    assert!(ir.text.contains("  blank_row @p0.blank1 at row 1\n"));
+    let after = ir.text.replace("  blank_row @p0.blank1 at row 1\n", "");
+    let ops = ir.lower_patch(&full_patch(&ir.text, &after)).unwrap();
+    xgwx_mcp::operations::apply_operation(&mut doc, &ops[0].name, ops[0].args.clone()).unwrap();
+    let rows = doc
+        .program()
+        .ladder_program(0)
+        .unwrap()
+        .unwrap()
+        .iec_row_frames()
+        .unwrap();
+    assert_eq!(
+        rows.iter().map(|r| r.row_index).collect::<Vec<_>>(),
+        vec![0, 1]
+    );
+    let final_ir = Projection::export(&doc, "revision", 0).unwrap();
+    assert!(final_ir.text.contains("RESET"));
+    assert!(!final_ir.text.contains("operand \"%MX2\""));
+}
+#[test]
+fn row_lifecycle_rejects_mixed_forged_multiple_and_readonly_edits() {
+    let mut doc = fixture("empty-projects/new-xgi.xgwx");
+    row_edit(
+        &mut doc,
+        "  rung_row @new-first at row 0 contact NO \"%MX0\" coil OUT \"%MX1\"",
+    );
+    row_edit(&mut doc, "  blank_row @new-space after row 0");
+    let ir = Projection::export(&doc, "revision", 0).unwrap();
+    assert!(!ir.text.contains("rung_row @p0.rung0")); // Native writer cannot remove the sole group.
+    for statement in [
+        "  blank_row @p0.fake after row 0",
+        "  blank_row @new-a after row 0\n  blank_row @new-b after row 0",
+        "  rung_row @new-a at row 1 contact INVALID \"%MX0\" coil OUT \"%MX1\"",
+    ] {
+        let after = format!("{}{statement}\n}}\n", &ir.text[..ir.text.len() - 2]);
+        assert!(ir.lower_patch(&full_patch(&ir.text, &after)).is_err());
+    }
+    let marker = ir
+        .text
+        .lines()
+        .find(|l| l.contains("blank_row") && l.contains("readonly"))
+        .unwrap();
+    assert!(
+        ir.lower_patch(&replace_patch(&ir.text, marker, ""))
+            .is_err()
+    );
+    let after = format!(
+        "{}  blank_row @new-a after row 0\n}}\n",
+        &ir.text[..ir.text.len() - 2]
+    )
+    .replace("revision", "forged");
+    assert!(ir.lower_patch(&full_patch(&ir.text, &after)).is_err());
+}
+#[test]
+fn xgk_row_insertion_uses_native_writer() {
+    let mut doc = fixture("elements.xgwx");
+    let mut expected = doc.clone();
+    xgwx_mcp::operations::apply_operation(
+        &mut expected,
+        "insert_ladder_row",
+        serde_json::json!({"program_index":0,"raw_y":0}),
+    )
+    .unwrap();
+    row_edit(&mut doc, "  blank_row @new-space before y 0");
+    assert_eq!(doc.to_bytes().unwrap(), expected.to_bytes().unwrap());
+}
+
+#[test]
+fn iec_blank_shift_preserves_or_rejects_complex_records_with_native_guards() {
+    for name in [
+        "ladder-wire-delete/iec-horizontal-native.xgwx",
+        "function-output-wires/base.xgwx",
+    ] {
+        let mut doc = fixture(name);
+        let rows = doc
+            .program()
+            .ladder_program(0)
+            .unwrap()
+            .unwrap()
+            .iec_row_frames()
+            .unwrap();
+        let first = rows[0].row_index;
+        let mut expected = doc.clone();
+        let native = xgwx_mcp::operations::apply_operation(
+            &mut expected,
+            "insert_iec_ld_blank_row",
+            serde_json::json!({"program_index":0,"after_row_index":first}),
+        );
+        if let Err(reason) = native {
+            let ir = Projection::export(&doc, "revision", 0).unwrap();
+            let after = format!(
+                "{}  blank_row @new-space after row {first}\n}}\n",
+                &ir.text[..ir.text.len() - 2]
+            );
+            let ops = ir.lower_patch(&full_patch(&ir.text, &after)).unwrap();
+            let bytes = doc.to_bytes().unwrap();
+            let rejected =
+                xgwx_mcp::operations::apply_operation(&mut doc, &ops[0].name, ops[0].args.clone())
+                    .unwrap_err();
+            assert_eq!(rejected, reason, "{name}");
+            assert_eq!(doc.to_bytes().unwrap(), bytes, "{name}");
+            continue;
+        }
+        row_edit(
+            &mut doc,
+            &format!("  blank_row @new-space after row {first}"),
+        );
+        assert_eq!(
+            doc.to_bytes().unwrap(),
+            expected.to_bytes().unwrap(),
+            "{name}"
+        );
+    }
+}
+#[test]
+fn iec_rung_lifecycle_preview_backup_stale_and_native_rollback() {
+    let doc = fixture("empty-projects/new-xgi.xgwx");
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = doc.to_verified_bytes().unwrap();
+    fs::write(dir.path().join("p.xgwx"), &bytes).unwrap();
+    let rev = revision(&bytes);
+    let store = FileStore::new(dir.path().into(), vec![]).unwrap();
+    let ir = Projection::export(&doc, &rev, 0).unwrap();
+    let new = format!(
+        "{}  rung_row @new-first at row 0 contact NO \"%MX0\" coil OUT \"%MX1\"\n}}\n",
+        &ir.text[..ir.text.len() - 2]
+    );
+    let patch = full_patch(&ir.text, &new);
+    let preview = store.apply_patch("p.xgwx", &rev, 0, &patch, true).unwrap();
+    assert_eq!(fs::read(dir.path().join("p.xgwx")).unwrap(), bytes);
+    let saved = store.apply_patch("p.xgwx", &rev, 0, &patch, false).unwrap();
+    assert_eq!(preview["revision_after"], saved["revision_after"]);
+    assert_eq!(
+        fs::read(saved["backup_path"].as_str().unwrap()).unwrap(),
+        bytes
+    );
+    assert_eq!(
+        store
+            .apply_patch("p.xgwx", &rev, 0, &patch, false)
+            .unwrap_err()
+            .code,
+        "stale_revision"
+    );
+    let bytes = fs::read(dir.path().join("p.xgwx")).unwrap();
+    let doc = XgwxDocument::parse(&bytes).unwrap();
+    let rev = revision(&bytes);
+    let ir = Projection::export(&doc, &rev, 0).unwrap();
+    let invalid = format!(
+        "{}  rung_row @new-overlap at row 0 contact NO \"%MX0\" coil OUT \"%MX1\"\n}}\n",
+        &ir.text[..ir.text.len() - 2]
+    );
+    let files = fs::read_dir(dir.path()).unwrap().count();
+    assert_eq!(
+        store
+            .apply_patch("p.xgwx", &rev, 0, &full_patch(&ir.text, &invalid), false)
+            .unwrap_err()
+            .code,
+        "operation_failed"
+    );
+    assert_eq!(fs::read(dir.path().join("p.xgwx")).unwrap(), bytes);
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), files);
+}
+
+fn captured_site(doc: &XgwxDocument, prefix: &str, mode: &str) -> String {
+    let ir = Projection::export(doc, "revision", 0).unwrap();
+    ir.text
+        .lines()
+        .find(|l| l.trim_start().starts_with(prefix) && l.contains(mode))
+        .unwrap_or_else(|| panic!("missing {prefix} {mode}\n{}", ir.text))
+        .split_whitespace()
+        .nth(1)
+        .unwrap()
+        .into()
+}
+#[test]
+fn iec_captured_contact_wire_repair_and_parallel_authoring_roundtrip() {
+    let mut doc = fixture("empty-projects/new-xgi.xgwx");
+    row_edit(
+        &mut doc,
+        "  rung_row @new-first at row 0 contact NO \"%MX0\" coil OUT \"%MX1\"",
+    );
+    row_edit(&mut doc, "  blank_row @new-space after row 0");
+    let site = captured_site(&doc, "parallel_site ", "readonly");
+    row_edit(
+        &mut doc,
+        &format!("  parallel_contact @new-branch site {site} kind NC operand \"%MX2\""),
+    );
+    let site = captured_site(&doc, "contact_site ", " WIRE ");
+    row_edit(
+        &mut doc,
+        &format!("  contact_insert @new-middle site {site} kind RISING operand \"%MX3\" x 7"),
+    );
+    let program = doc.program().ladder_program(0).unwrap().unwrap();
+    let record = program
+        .iec_record_frames()
+        .unwrap()
+        .into_iter()
+        .find(|r| {
+            matches!(r.kind, xgwx::IecRecordKind::Contact(_)) && program.data[r.offset + 5] == 7
+        })
+        .unwrap();
+    apply(
+        &mut doc,
+        "delete_iec_ld_contact",
+        serde_json::json!({"program_index":0,"contact_offset":record.offset,"expected_raw_x":7,"expected_contact_kind":"RISING","expected_variable":"%MX3"}),
+    );
+    let site = captured_site(&doc, "wire_gap ", "readonly");
+    row_edit(
+        &mut doc,
+        &format!("  wire_restore @new-restore site {site}"),
+    );
+    // Fixture-only flags mirror captured short-wire cell geometry; production
+    // never changes native bytes to make an unsupported site editable.
+    let program = doc.program().ladder_program(0).unwrap().unwrap();
+    let wire = program
+        .iec_record_frames()
+        .unwrap()
+        .into_iter()
+        .find(|r| r.kind == xgwx::IecRecordKind::ShortWire && program.data[r.offset + 5] == 7)
+        .unwrap();
+    let mut data = program.data.clone();
+    data[wire.offset + 9..wire.offset + 15].copy_from_slice(&[0, 0, 4, 0, 0, 0]);
+    let mut doc = fixture_with_iec_payload(doc, data);
+    let site = captured_site(&doc, "contact_site ", " SHORT_WIRE ");
+    row_edit(
+        &mut doc,
+        &format!("  contact_insert @new-short site {site} kind NEGATED_FALLING operand \"%MX4\""),
+    );
+    assert!(
+        Projection::export(&doc, "revision", 0)
+            .unwrap()
+            .text
+            .contains("NEGATED_FALLING \"%MX4\"")
+    );
+    // This generated branch is not the native leading-gap layout. Its head
+    // stays guarded; no leading site may be invented from row coordinates.
+    assert!(
+        !Projection::export(&doc, "revision", 0)
+            .unwrap()
+            .text
+            .contains(" LEADING readonly")
+    );
+}
+#[test]
+fn iec_site_authoring_rejects_forged_sites_mixed_mutations_and_native_invalid_operands() {
+    let mut doc = fixture("empty-projects/new-xgi.xgwx");
+    row_edit(
+        &mut doc,
+        "  rung_row @new-first at row 0 contact NO \"%MX0\" coil OUT \"%MX1\"",
+    );
+    let site = captured_site(&doc, "contact_site ", " WIRE ");
+    let ir = Projection::export(&doc, "revision", 0).unwrap();
+    for statement in [
+        "  contact_insert @new-a site @fake kind NO operand \"%MX0\" x 4".to_string(),
+        format!("  contact_insert @new-a site {site} kind NO operand \"%MX0\""),
+        format!("  contact_insert @new-a site {site} kind UNKNOWN operand \"%MX0\" x 4"),
+        format!("  wire_restore @new-a site {site}"),
+        format!("  contact_insert @p0.forged site {site} kind NO operand \"%MX0\" x 4"),
+        format!(
+            "  contact_insert @new-a site {site} kind NO operand \"%MX0\" x 4\n  contact_insert @new-b site {site} kind NO operand \"%MX0\" x 7"
+        ),
+    ] {
+        let after = format!("{}{statement}\n}}\n", &ir.text[..ir.text.len() - 2]);
+        assert!(
+            ir.lower_patch(&full_patch(&ir.text, &after)).is_err(),
+            "{statement}"
+        );
+    }
+    let after = format!(
+        "{}  contact_insert @new-a site {site} kind NO operand \"%MX0\" x 4\n}}\n",
+        &ir.text[..ir.text.len() - 2]
+    )
+    .replace("revision", "forged");
+    assert!(ir.lower_patch(&full_patch(&ir.text, &after)).is_err());
+    let bytes = doc.to_bytes().unwrap();
+    for (value, x) in [("%MW0", 4), ("%MX0", 5), ("%MX0", 94)] {
+        let after = format!(
+            "{}  contact_insert @new-a site {site} kind NO operand \"{value}\" x {x}\n}}\n",
+            &ir.text[..ir.text.len() - 2]
+        );
+        let ops = ir.lower_patch(&full_patch(&ir.text, &after)).unwrap();
+        assert!(
+            xgwx_mcp::operations::apply_operation(&mut doc, &ops[0].name, ops[0].args.clone())
+                .is_err()
+        );
+        assert_eq!(doc.to_bytes().unwrap(), bytes);
+    }
+}
+
+#[test]
+fn iec_comment_row_copies_captured_template_and_retains_native_guards() {
+    let mut doc = fixture("empty-projects/new-xgi.xgwx");
+    row_edit(
+        &mut doc,
+        "  contact @new-first at(group=0,row=0,x=1) NO \"%MX0\"",
+    );
+    let mut doc = captured_iec_comment_fixture(doc);
+    row_edit(&mut doc, "  blank_row @new-space after row 0");
+    row_edit(
+        &mut doc,
+        "  comment_row @new-note at row 1 text \"New comment\"",
+    );
+    assert!(
+        Projection::export(&doc, "revision", 0)
+            .unwrap()
+            .text
+            .contains("IEC \"New comment\"")
+    );
+}
+
+fn fixture_with_iec_payload(mut doc: XgwxDocument, data: Vec<u8>) -> XgwxDocument {
+    use base64::Engine;
+    use std::io::Write;
+    let program = doc.program().ladder_program(0).unwrap().unwrap();
+    let encoded = if program.compressed {
+        let mut encoder = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::best());
+        encoder.write_all(&data).unwrap();
+        encoder.finish().unwrap()
+    } else {
+        data
+    };
+    let xml = doc.container().xml().to_owned();
+    let parsed = roxmltree::Document::parse(&xml).unwrap();
+    let node = parsed
+        .descendants()
+        .find(|n| n.has_tag_name("ProgramData"))
+        .unwrap();
+    let range = node.children().find(|n| n.is_text()).unwrap().range();
+    let mut xml = xml.clone();
+    xml.replace_range(
+        range,
+        &base64::engine::general_purpose::STANDARD.encode(encoded),
+    );
+    doc.container_mut().replace_xml(xml).unwrap();
+    XgwxDocument::parse(&doc.to_bytes().unwrap()).unwrap()
+}
+
+#[test]
+fn iec_site_edit_preview_save_backup_and_native_failure_are_atomic() {
+    let mut doc = fixture("empty-projects/new-xgi.xgwx");
+    row_edit(
+        &mut doc,
+        "  rung_row @new-first at row 0 contact NO \"%MX0\" coil OUT \"%MX1\"",
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = doc.to_verified_bytes().unwrap();
+    fs::write(dir.path().join("p.xgwx"), &bytes).unwrap();
+    let store = FileStore::new(dir.path().into(), vec![]).unwrap();
+    let rev = revision(&bytes);
+    let ir = Projection::export(&doc, &rev, 0).unwrap();
+    let site = captured_site(&doc, "contact_site ", " WIRE ");
+    let text = format!(
+        "{}  contact_insert @new-interlock site {site} kind NC operand \"%MX2\" x 7\n}}\n",
+        &ir.text[..ir.text.len() - 2]
+    );
+    let patch = full_patch(&ir.text, &text);
+    let preview = store.apply_patch("p.xgwx", &rev, 0, &patch, true).unwrap();
+    assert_eq!(fs::read(dir.path().join("p.xgwx")).unwrap(), bytes);
+    let saved = store.apply_patch("p.xgwx", &rev, 0, &patch, false).unwrap();
+    assert_eq!(preview["revision_after"], saved["revision_after"]);
+    assert_eq!(
+        fs::read(saved["backup_path"].as_str().unwrap()).unwrap(),
+        bytes
+    );
+    let bytes = fs::read(dir.path().join("p.xgwx")).unwrap();
+    let doc = XgwxDocument::parse(&bytes).unwrap();
+    let ir = Projection::export(&doc, &revision(&bytes), 0).unwrap();
+    let site = captured_site(&doc, "contact_site ", " WIRE ");
+    let invalid = format!(
+        "{}  contact_insert @new-invalid site {site} kind NO operand \"%MW0\" x 4\n}}\n",
+        &ir.text[..ir.text.len() - 2]
+    );
+    let files = fs::read_dir(dir.path()).unwrap().count();
+    assert_eq!(
+        store
+            .apply_patch(
+                "p.xgwx",
+                &revision(&bytes),
+                0,
+                &full_patch(&ir.text, &invalid),
+                false
+            )
+            .unwrap_err()
+            .code,
+        "operation_failed"
+    );
+    assert_eq!(fs::read(dir.path().join("p.xgwx")).unwrap(), bytes);
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), files);
 }

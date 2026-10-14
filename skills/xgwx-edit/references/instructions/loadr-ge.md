@@ -15,7 +15,7 @@ Manual section(s): 4.15.4. Original Korean notes below may cover the other varia
 
 ## Editing route
 
-Use `insert_ladder_comparison` after calling `describe_operation` for its current schema.
+Use `get_ir` → `apply_patch` for this instruction edit. `insert_ladder_comparison` is the internal writer route, not a separate MCP tool. Preserve the exported revision and native constraints.
 The writer mnemonic is `R>=`; the catalog records opcode `1296` and `2` operands in order.
 Inspect the CPU/project and target cells first. Use the inspected revision and positions, preserve expected values, dry-run when useful, then save and inspect the result. See the [editing skill](../../SKILL.md) and [ladder workflow](../ladder.md).
 

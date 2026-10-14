@@ -7,6 +7,12 @@ fn optional<T: serde::Serialize>(value: Option<T>) -> String {
         .unwrap_or_else(|| "none".into())
 }
 pub(crate) fn export(doc: &XgwxDocument, program: Option<(usize, &str)>) -> String {
+    export_context(doc, program, false)
+}
+pub(crate) fn export_properties(doc: &XgwxDocument, section: &str) -> String {
+    export_context(doc, None, matches!(section, "project" | "modules"))
+}
+fn export_context(doc: &XgwxDocument, program: Option<(usize, &str)>, compact_cpu: bool) -> String {
     let mut text = String::new();
     let configs = doc.configuration().list();
     text.push_str(&format!("  context @context configuration_count {} task_count {} memory_model \"not_decoded\" execution_order \"not_decoded\" readonly\n", configs.len(),doc.program().tasks().len()));
@@ -14,22 +20,34 @@ pub(crate) fn export(doc: &XgwxDocument, program: Option<(usize, &str)>) -> Stri
         let cpu = xgwx::cpu_catalog()
             .iter()
             .find(|cpu| Some(cpu.type_code) == c.type_code);
-        text.push_str(&format!(
-            "  cpu @cpu{i} type_code {} model {} family {} status {} readonly\n",
-            optional(c.type_code),
-            optional(cpu.map(|c| c.model)),
-            optional(cpu.map(|c| c.family)),
-            json!(if cpu.is_some() {
-                "catalog_match"
-            } else {
-                "unknown"
-            })
-        ));
+        let status = json!(if cpu.is_some() {
+            "catalog_match"
+        } else {
+            "unknown"
+        });
+        if compact_cpu {
+            text.push_str(&format!(
+                "  cpu @cpu{i} model {} status {status} readonly\n",
+                optional(cpu.map(|c| c.model))
+            ));
+        } else {
+            text.push_str(&format!(
+                "  cpu @cpu{i} type_code {} model {} family {} status {status} readonly\n",
+                optional(c.type_code),
+                optional(cpu.map(|c| c.model)),
+                optional(cpu.map(|c| c.family))
+            ));
+        }
     }
     let tasks = doc.program().tasks();
     for (i, t) in tasks.iter().enumerate() {
-        text.push_str(&format!("  task @t{i} document_index {i} name {} task_index {} type_code {} kind {} priority {} device {} device_type {} bit_condition {} word_condition {} word_value {} attributes {} readonly\n",
-            optional(t.name.as_deref()),optional(t.task_index),optional(t.type_code),optional(t.kind),optional(t.priority),
+        let type_code = if compact_cpu {
+            String::new()
+        } else {
+            format!(" type_code {}", optional(t.type_code))
+        };
+        text.push_str(&format!("  task @t{i} document_index {i} name {} task_index {}{type_code} kind {} priority {} device {} device_type {} bit_condition {} word_condition {} word_value {} attributes {} readonly\n",
+            optional(t.name.as_deref()),optional(t.task_index),optional(t.kind),optional(t.priority),
             optional(t.device.as_deref()),optional(t.device_type),optional(t.bit_condition),optional(t.word_condition),optional(t.word_value),
             json!(serde_json::to_string(&t.attributes.iter().map(|a|(&a.name,&a.value)).collect::<Vec<_>>()).unwrap())));
     }

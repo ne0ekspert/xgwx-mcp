@@ -1,7 +1,9 @@
 //! Guarded SFC projection; snapshots come from the fresh source, never the client.
 
 use crate::{
-    operation_types::{SfcEntity, SfcEntityPatch, SfcRow, SfcVariable},
+    operation_types::{
+        SfcDeclaration, SfcEntity, SfcEntityPatch, SfcPosition, SfcRow, SfcVariable,
+    },
     storage::{EditOperation, StoreError},
     text_ir::{apply_unified_patch, lex},
 };
@@ -51,6 +53,7 @@ pub struct Projection {
     index: usize,
     program: SfcProgram,
     sources: BTreeMap<String, Source>,
+    document: XgwxDocument,
 }
 impl Projection {
     pub fn export(
@@ -88,9 +91,7 @@ impl Projection {
                 quoted(&v.name),
                 quoted(&v.data_type),
                 v.system,
-                quoted(&crate::storage::revision(
-                    declaration.to_string().as_bytes()
-                )),
+                quoted(&declaration.to_string()),
                 quoted(&v.description)
             ));
             sources.insert(id, Source::Variable { index: i });
@@ -166,6 +167,7 @@ impl Projection {
             index,
             program,
             sources,
+            document: doc.clone(),
         })
     }
     pub fn lower_patch(&self, patch: &str) -> Result<Vec<EditOperation>, StoreError> {
@@ -180,14 +182,17 @@ impl Projection {
             parsed
                 .order
                 .iter()
-                .filter(|id| parsed.nodes[*id].fields["statement"] != "sfc_row")
+                .filter(|id| {
+                    !matches!(
+                        parsed.nodes[*id].fields["statement"].as_str(),
+                        "sfc_row" | "sfc_variable"
+                    )
+                })
                 .cloned()
                 .collect::<Vec<_>>()
         };
         if nonrows(&before) != nonrows(&after) {
-            return Err(unsupported(
-                "only supported SFC rows can be inserted, deleted or reordered; declaration and entity identities remain fixed",
-            ));
+            return Err(unsupported("entity identities and order remain fixed"));
         }
         let mut rows = BTreeMap::<usize, Vec<SfcRow>>::new();
         for block in &self.program.blocks {
@@ -208,23 +213,7 @@ impl Projection {
                     .cloned()
                     .collect::<Vec<_>>()
             };
-            let old_ids = ids(&before);
             let new_ids = ids(&after);
-            let structural = old_ids != new_ids;
-            if structural
-                && !original.iter().all(|r| {
-                    r.position.is_none()
-                        && r.branch_end.is_none()
-                        && matches!(
-                            r.kind.as_str(),
-                            "step" | "transition" | "label" | "jump" | "continuation"
-                        )
-                })
-            {
-                return Err(unsupported(
-                    "text row insertion/deletion/reordering currently requires a supported linear chart; positioned branches use direct operations",
-                ));
-            }
             let mut target = vec![];
             for id in &new_ids {
                 let node = &after.nodes[id];
@@ -235,14 +224,6 @@ impl Projection {
                             return Err(unsupported(
                                 "retained SFC rows cannot move between charts",
                             ));
-                        }
-                        for key in ["kind", "position", "branch_end"] {
-                            if old.fields[key] != node.fields.get(key).cloned().unwrap_or_default()
-                            {
-                                return Err(unsupported(format!(
-                                    "{id}: {key} is read-only on retained rows"
-                                )));
-                            }
                         }
                         Some(row)
                     }
@@ -293,6 +274,7 @@ impl Projection {
             }
         }
         let mut edits = vec![];
+        let mut variable_candidate = None;
         let mut variables = self
             .program
             .variables
@@ -305,7 +287,17 @@ impl Projection {
             if matches!(self.sources[id], Source::Row { .. }) {
                 continue;
             }
-            let new = &after.nodes[id];
+            let Some(new) = after.nodes.get(id) else {
+                let Source::Variable { index } = &self.sources[id] else {
+                    return Err(unsupported("entity identities are immutable"));
+                };
+                let v = &variables[*index];
+                if v.system {
+                    return Err(unsupported("system declarations are read-only"));
+                }
+                edits.push(EditOperation{name:"edit_sfc_variable".into(),args:json!({"patch":{"program_index":self.index,"expected_variables":variables,"name":v.name,"data_type":v.data_type,"description":v.description,"remove":true,"update":false,"declaration":v.declaration}})});
+                continue;
+            };
             if old == new {
                 continue;
             }
@@ -325,7 +317,7 @@ impl Projection {
                     "action_code",
                     "transition_code",
                 ][..],
-                Source::Variable { .. } => &["description"][..],
+                Source::Variable { .. } => &["description", "type", "declaration"][..],
                 Source::Field { .. } => &["value"][..],
             };
             for (key, value) in &old.fields {
@@ -340,11 +332,39 @@ impl Projection {
                 Source::Variable { index } => {
                     let v = &variables[*index];
                     let description = string("description")?;
-                    if description == v.description {
+                    let data_type = string("type")?;
+                    let declaration: Option<SfcDeclaration> =
+                        serde_json::from_str(&string("declaration")?).map_err(invalid)?;
+                    if description == v.description
+                        && data_type == v.data_type
+                        && declaration == v.declaration
+                    {
                         continue;
                     }
-                    edits.push(EditOperation{name:"edit_sfc_variable".into(),args:json!({"patch":{"program_index":self.index,"expected_variables":variables,"name":v.name,"data_type":v.data_type,"description":description,"remove":false,"update":true,"declaration":v.declaration}})});
-                    variables[*index].description = description;
+                    if v.system {
+                        return Err(unsupported("system declarations are read-only"));
+                    }
+                    edits.push(EditOperation{name:"edit_sfc_variable".into(),args:json!({"patch":{"program_index":self.index,"expected_variables":variables,"name":v.name,"data_type":data_type,"description":description,"remove":false,"update":true,"declaration":declaration}})});
+                    // Re-decode native canonical values before the next expected snapshot.
+                    // Literal spelling/default metadata can normalize during serialization.
+                    let candidate = variable_candidate.get_or_insert_with(|| self.document.clone());
+                    crate::operations::apply_operation(
+                        candidate,
+                        "edit_sfc_variable",
+                        edits.last().unwrap().args.clone(),
+                    )
+                    .map_err(|e| StoreError {
+                        operation_index: Some(edits.len() - 1),
+                        operation_name: Some("edit_sfc_variable".into()),
+                        ..StoreError::new("operation_failed", e)
+                    })?;
+                    variables = candidate
+                        .variable()
+                        .sfc_variables(self.index)
+                        .map_err(|e| StoreError::new("operation_failed", e))?
+                        .into_iter()
+                        .map(SfcVariable::from)
+                        .collect();
                 }
                 Source::Field { patch } => {
                     let mut patch = patch.clone();
@@ -358,6 +378,71 @@ impl Projection {
                     });
                 }
             }
+        }
+        for id in &after.order {
+            let node = &after.nodes[id];
+            if node.fields["statement"] != "sfc_variable" {
+                continue;
+            }
+            if node.scope.len() != 1 {
+                return Err(unsupported(
+                    "SFC declarations belong directly to the program",
+                ));
+            }
+            if before.nodes.contains_key(id) {
+                continue;
+            }
+            if !id.starts_with("@new-") || id.len() <= 5 {
+                return Err(invalid(
+                    "new declarations require fresh @new-<name> identities",
+                ));
+            }
+            let f = &node.fields;
+            let keys = [
+                "statement",
+                "name",
+                "type",
+                "system",
+                "declaration",
+                "description",
+            ];
+            if f.len() != keys.len()
+                || keys.iter().any(|k| !f.contains_key(*k))
+                || f["system"] != "false"
+            {
+                return Err(invalid(
+                    "new declarations require exactly the exported fields and system false",
+                ));
+            }
+            let string = |key: &str| serde_json::from_str::<String>(&f[key]).map_err(invalid);
+            let declaration: Option<SfcDeclaration> =
+                serde_json::from_str(&string("declaration")?).map_err(invalid)?;
+            edits.push(EditOperation{name:"edit_sfc_variable".into(),args:json!({"patch":{"program_index":self.index,"expected_variables":variables,"name":string("name")?,"data_type":string("type")?,"description":string("description")?,"remove":false,"update":false,"declaration":declaration}})});
+        }
+        let variable_ids = |p: &Parsed| {
+            p.order
+                .iter()
+                .filter(|id| p.nodes[*id].fields["statement"] == "sfc_variable")
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let old_variables = variable_ids(&before);
+        let new_variables = variable_ids(&after);
+        let retained = |ids: &Vec<String>| {
+            ids.iter()
+                .filter(|id| before.nodes.contains_key(*id) && after.nodes.contains_key(*id))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        if retained(&old_variables) != retained(&new_variables) {
+            return Err(unsupported(
+                "native declaration order is derived; declarations cannot be reordered",
+            ));
+        }
+        if old_variables != new_variables && (edits.len() != 1 || !rows.is_empty()) {
+            return Err(unsupported(
+                "declaration insertion/deletion must be the sole mutation; re-export afterward",
+            ));
         }
         if !rows.is_empty() && (rows.len() != 1 || !edits.is_empty()) {
             return Err(unsupported(
@@ -376,7 +461,7 @@ impl Projection {
         Ok(edits)
     }
 }
-fn decode_row(node: &Node, template: Option<&SfcRow>) -> Result<SfcRow, StoreError> {
+fn decode_row(node: &Node, _template: Option<&SfcRow>) -> Result<SfcRow, StoreError> {
     let f = &node.fields;
     let keys = [
         "statement",
@@ -397,17 +482,24 @@ fn decode_row(node: &Node, template: Option<&SfcRow>) -> Result<SfcRow, StoreErr
     }
     let string = |key: &str| serde_json::from_str::<String>(&f[key]).map_err(invalid);
     let kind = string("kind")?;
-    if template.is_none()
-        && (!matches!(
-            kind.as_str(),
-            "step" | "transition" | "label" | "jump" | "continuation"
-        ) || f["position"] != "none"
-            || f["branch_end"] != "none")
-    {
-        return Err(unsupported(
-            "new text SFC rows use linear kinds with position none and branch_end none; branches use direct operations",
-        ));
-    }
+    let position = match optional_value(&f["position"])? {
+        None => None,
+        Some(value) => {
+            let (row, column) = value
+                .strip_prefix("row=")
+                .and_then(|v| v.split_once(",column="))
+                .ok_or_else(|| invalid("position must be none or a quoted row=N,column=M"))?;
+            Some(SfcPosition {
+                row: row.parse().map_err(invalid)?,
+                column: column.parse().map_err(invalid)?,
+            })
+        }
+    };
+    let branch_end = if f["branch_end"] == "none" {
+        None
+    } else {
+        Some(f["branch_end"].parse().map_err(invalid)?)
+    };
     Ok(SfcRow {
         kind,
         title: string("title")?,
@@ -420,8 +512,8 @@ fn decode_row(node: &Node, template: Option<&SfcRow>) -> Result<SfcRow, StoreErr
         action_time: optional_value(&f["time"])?,
         action_code: optional_value(&f["action_code"])?,
         transition_code: optional_value(&f["transition_code"])?,
-        position: template.and_then(|r| r.position.clone()),
-        branch_end: template.and_then(|r| r.branch_end),
+        position,
+        branch_end,
     })
 }
 

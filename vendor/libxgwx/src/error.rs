@@ -1,0 +1,527 @@
+use std::fmt;
+use std::io;
+
+/// Errors returned while parsing `.xgwx` files.
+#[derive(Debug)]
+pub enum XgwxError {
+    Io(io::Error),
+    InvalidMagic,
+    MissingMainPayload,
+    InvalidGzipHeader {
+        offset: usize,
+    },
+    UnsupportedGzipCompression {
+        offset: usize,
+        method: u8,
+    },
+    ReservedGzipFlags {
+        offset: usize,
+        flags: u8,
+    },
+    TruncatedGzipMember {
+        offset: usize,
+    },
+    Inflate(flate2::DecompressError),
+    GzipCrcMismatch {
+        offset: usize,
+        expected: u32,
+        actual: u32,
+    },
+    GzipSizeMismatch {
+        offset: usize,
+        expected: u32,
+        actual: u32,
+    },
+    MissingProgramData,
+    Base64(base64::DecodeError),
+    InvalidHexPayload {
+        element: String,
+        attribute: String,
+    },
+    Bzip2(io::Error),
+    Utf8(std::string::FromUtf8Error),
+    Xml(roxmltree::Error),
+    ResourceLimitExceeded {
+        resource: &'static str,
+        limit: usize,
+    },
+    /// Installed record index does not exist.
+    ModuleIndexNotFound {
+        index: usize,
+    },
+    /// A selected hardware record cannot be safely edited.
+    HardwareEdit(String),
+    ModuleNotFound {
+        base: u32,
+        slot: u32,
+    },
+    InvalidBaseSlotCount {
+        base: u32,
+        slot_count: u32,
+    },
+    AmbiguousBase {
+        base: u32,
+    },
+    MissingBaseSlotCount {
+        base: u32,
+    },
+    BaseNotFound {
+        base: u32,
+    },
+    MissingModuleContainer,
+    MissingNetworkContainer,
+    MissingNetworkConfigurationGroup,
+    NetworkNotFound {
+        index: usize,
+    },
+    MissingNetworkAttribute {
+        index: usize,
+        attribute: &'static str,
+    },
+    /// A document-wide network membership index is absent.
+    NetworkModuleIndexNotFound {
+        /// Requested membership index.
+        index: usize,
+    },
+    NetworkModuleNotFound {
+        base: u32,
+        slot: u32,
+    },
+    AmbiguousNetworkModule {
+        base: u32,
+        slot: u32,
+    },
+    MissingNetworkModuleAttribute {
+        base: u32,
+        slot: u32,
+        attribute: &'static str,
+    },
+    AmbiguousModule {
+        base: u32,
+        slot: u32,
+    },
+    MissingModuleAttribute {
+        base: u32,
+        slot: u32,
+        attribute: &'static str,
+    },
+    InvalidModuleInputFilterTarget {
+        base: u32,
+        slot: u32,
+    },
+    UnknownModuleCatalogModel {
+        model: String,
+    },
+    UnknownCpuModel {
+        model: String,
+    },
+    UnsupportedCpuHardware {
+        type_code: u32,
+    },
+    UnsupportedCpuChange {
+        from: String,
+        to: String,
+    },
+    UnsupportedXgiCpuChange {
+        reason: &'static str,
+    },
+    FixedCpuModule {
+        base: u32,
+        slot: u32,
+    },
+    CpuHardwareLimit {
+        model: String,
+        base: u32,
+        slot: u32,
+    },
+    AmbiguousConfiguration,
+    /// Requested document-wide configuration record is absent.
+    ConfigurationIndexNotFound {
+        /// Requested configuration index.
+        index: usize,
+    },
+    /// A document-wide parameter index is absent from the requested scope.
+    ParameterIndexNotFound {
+        /// Requested document-wide record index.
+        index: usize,
+    },
+    /// A read-only record index is absent from the selected scope.
+    RecordIndexNotFound {
+        /// Requested record family.
+        kind: &'static str,
+        /// Document-wide record index within that family.
+        index: usize,
+    },
+    MissingConfiguration,
+    MissingConfigurationAttribute {
+        attribute: &'static str,
+    },
+    UnknownModuleOption {
+        model: String,
+        key: String,
+    },
+    ModuleCatalogMismatch {
+        base: u32,
+        slot: u32,
+    },
+    ModuleOptionIndexOutOfRange {
+        key: String,
+        index: u32,
+        count: u32,
+    },
+    InvalidModuleOptionValue {
+        key: String,
+        value: u32,
+    },
+    ModuleOptionDetailsTooShort {
+        key: String,
+    },
+    ModulePlacementExceedsBase {
+        base: u32,
+        slot: u32,
+        slot_span: u32,
+        slot_count: u32,
+    },
+    ModulePlacementConflict {
+        base: u32,
+        slot: u32,
+        slot_span: u32,
+        conflicting_slot: u32,
+    },
+    /// No hardware base exists at the selected document index.
+    BaseIndexNotFound {
+        /// Zero-based base record index in document order.
+        index: usize,
+    },
+    ProgramNotFound {
+        index: usize,
+    },
+    MissingProgramAttribute {
+        index: usize,
+        attribute: &'static str,
+    },
+    MissingProgramName {
+        index: usize,
+    },
+    MissingSymbols,
+    VariableNotFound {
+        index: usize,
+    },
+    InvalidVariableRecord {
+        index: usize,
+    },
+    VariableFieldLengthChanged {
+        index: usize,
+        field: &'static str,
+        expected_utf16_units: usize,
+        actual_utf16_units: usize,
+    },
+    LadderCellNotFound {
+        program_index: usize,
+        offset: usize,
+    },
+    LadderCellChanged {
+        program_index: usize,
+        offset: usize,
+    },
+    LadderCellLengthChanged {
+        expected_utf16_units: usize,
+        actual_utf16_units: usize,
+    },
+    UnsupportedLadderLayout,
+    InvalidLadderEdit {
+        reason: &'static str,
+    },
+    AuthenticatedRewriteUnsupported,
+    BrowserHardwareEdit(String),
+    BrowserNetworkEdit(String),
+    SfcEdit(String),
+    TextProgramEdit(String),
+    ProjectRename(String),
+    /// A selected document edit cannot safely use the current XML/tree state.
+    DocumentEdit(String),
+    /// A selected global variable cannot be safely inspected or edited.
+    GlobalVariableEdit(String),
+    ProgramCreation(String),
+    ProgramDeletion(String),
+    ProgramReorder(String),
+    RewriteVerificationFailed,
+}
+
+impl fmt::Display for XgwxError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(error) => write!(f, "failed to read xgwx file: {error}"),
+            Self::InvalidMagic => write!(f, "file does not start with XG magic"),
+            Self::MissingMainPayload => write!(f, "missing gzip-compressed XML payload"),
+            Self::InvalidGzipHeader { offset } => write!(f, "invalid gzip header at byte {offset}"),
+            Self::UnsupportedGzipCompression { offset, method } => {
+                write!(
+                    f,
+                    "unsupported gzip compression method {method} at byte {offset}"
+                )
+            }
+            Self::ReservedGzipFlags { offset, flags } => {
+                write!(f, "reserved gzip flags 0x{flags:02x} at byte {offset}")
+            }
+            Self::TruncatedGzipMember { offset } => {
+                write!(f, "truncated gzip member at byte {offset}")
+            }
+            Self::Inflate(error) => write!(f, "failed to inflate gzip payload: {error}"),
+            Self::GzipCrcMismatch {
+                offset,
+                expected,
+                actual,
+            } => write!(
+                f,
+                "gzip CRC mismatch at byte {offset}: expected 0x{expected:08x}, got 0x{actual:08x}"
+            ),
+            Self::GzipSizeMismatch {
+                offset,
+                expected,
+                actual,
+            } => write!(
+                f,
+                "gzip size mismatch at byte {offset}: expected {expected}, got {actual}"
+            ),
+            Self::MissingProgramData => write!(f, "program is missing a ProgramData element"),
+            Self::Base64(error) => write!(f, "failed to base64-decode ProgramData: {error}"),
+            Self::InvalidHexPayload { element, attribute } => {
+                write!(f, "{element} {attribute} is not valid hex ASCII payload")
+            }
+            Self::Bzip2(error) => write!(f, "failed to bzip2-decompress ProgramData: {error}"),
+            Self::Utf8(error) => write!(f, "XML payload is not valid UTF-8: {error}"),
+            Self::Xml(error) => write!(f, "XML payload is not well-formed: {error}"),
+            Self::ResourceLimitExceeded { resource, limit } => {
+                write!(f, "{resource} exceeds parser limit ({limit} bytes/items)")
+            }
+            Self::ModuleNotFound { base, slot } => {
+                write!(f, "module at base {base}, slot {slot} was not found")
+            }
+            Self::InvalidBaseSlotCount { base, slot_count } => write!(
+                f,
+                "base {base} does not support {slot_count} slots; choose 4, 6, 8, 10 or 12"
+            ),
+            Self::AmbiguousBase { base } => write!(f, "hardware base {base} is ambiguous"),
+            Self::MissingBaseSlotCount { base } => {
+                write!(f, "hardware base {base} is missing SlotCount")
+            }
+            Self::BaseNotFound { base } => write!(f, "hardware base {base} was not found"),
+            Self::MissingModuleContainer => {
+                write!(f, "workspace is missing the I/O module container")
+            }
+            Self::MissingNetworkContainer => {
+                write!(f, "workspace is missing a network container")
+            }
+            Self::MissingNetworkConfigurationGroup => {
+                write!(f, "workspace is missing the network configuration group")
+            }
+            Self::NetworkNotFound { index } => write!(f, "network at index {index} was not found"),
+            Self::MissingNetworkAttribute { index, attribute } => {
+                write!(f, "network at index {index} is missing {attribute}")
+            }
+            Self::NetworkModuleIndexNotFound { index } => {
+                write!(f, "network membership at index {index} was not found")
+            }
+            Self::NetworkModuleNotFound { base, slot } => {
+                write!(
+                    f,
+                    "network module at base {base}, slot {slot} was not found"
+                )
+            }
+            Self::AmbiguousNetworkModule { base, slot } => {
+                write!(f, "multiple network modules match base {base}, slot {slot}")
+            }
+            Self::MissingNetworkModuleAttribute {
+                base,
+                slot,
+                attribute,
+            } => write!(
+                f,
+                "network module at base {base}, slot {slot} is missing {attribute}"
+            ),
+            Self::AmbiguousModule { base, slot } => {
+                write!(f, "multiple modules match base {base}, slot {slot}")
+            }
+            Self::MissingModuleAttribute {
+                base,
+                slot,
+                attribute,
+            } => write!(
+                f,
+                "module at base {base}, slot {slot} is missing {attribute}"
+            ),
+            Self::InvalidModuleInputFilterTarget { base, slot } => write!(
+                f,
+                "module at base {base}, slot {slot} is not an XGI-D24A/B input module"
+            ),
+            Self::UnknownModuleCatalogModel { model } => {
+                write!(f, "XGK module catalog does not contain {model}")
+            }
+            Self::UnknownCpuModel { model } => {
+                write!(f, "CPU catalog does not contain {model}")
+            }
+            Self::UnsupportedCpuHardware { type_code } => write!(
+                f,
+                "hardware editing is not verified for CPU type {type_code}"
+            ),
+            Self::UnsupportedCpuChange { from, to } => write!(
+                f,
+                "CPU change from {from} to {to} requires an unsupported hardware/program migration"
+            ),
+            Self::UnsupportedXgiCpuChange { reason } => {
+                write!(f, "XGI CPU change is unavailable: {reason}")
+            }
+            Self::FixedCpuModule { base, slot } => write!(
+                f,
+                "CPU built-in module at base {base}, slot {slot} cannot be removed or replaced"
+            ),
+            Self::CpuHardwareLimit { model, base, slot } => write!(
+                f,
+                "hardware at base {base}, slot {slot} exceeds {model} limits"
+            ),
+            Self::AmbiguousConfiguration => {
+                write!(f, "hardware editing requires exactly one Configuration")
+            }
+            Self::ConfigurationIndexNotFound { index } => {
+                write!(f, "configuration at index {index} was not found")
+            }
+            Self::ParameterIndexNotFound { index } => {
+                write!(f, "parameter at index {index} was not found in this scope")
+            }
+            Self::RecordIndexNotFound { kind, index } => {
+                write!(f, "{kind} at index {index} was not found in this scope")
+            }
+            Self::MissingConfiguration => write!(f, "workspace is missing a Configuration"),
+            Self::MissingConfigurationAttribute { attribute } => {
+                write!(f, "workspace Configuration is missing {attribute}")
+            }
+            Self::UnknownModuleOption { model, key } => {
+                write!(f, "XGK module {model} has no writable option {key}")
+            }
+            Self::ModuleCatalogMismatch { base, slot } => write!(
+                f,
+                "module at base {base}, slot {slot} does not uniquely match the XGK module catalog"
+            ),
+            Self::ModuleOptionIndexOutOfRange { key, index, count } => {
+                write!(f, "module option {key} index {index} is outside 0..{count}")
+            }
+            Self::InvalidModuleOptionValue { key, value } => {
+                write!(f, "module option {key} does not allow value {value}")
+            }
+            Self::ModuleOptionDetailsTooShort { key } => {
+                write!(f, "module Details is too short for option {key}")
+            }
+            Self::ModulePlacementExceedsBase {
+                base,
+                slot,
+                slot_span,
+                slot_count,
+            } => write!(
+                f,
+                "module at base {base}, slot {slot} occupies {slot_span} slots but the base has only {slot_count} slots"
+            ),
+            Self::ModulePlacementConflict {
+                base,
+                slot,
+                slot_span,
+                conflicting_slot,
+            } => write!(
+                f,
+                "module at base {base}, slot {slot} occupies {slot_span} slots and overlaps the module at slot {conflicting_slot}"
+            ),
+            Self::ModuleIndexNotFound { index } => write!(f, "module index {index} not found"),
+            Self::HardwareEdit(reason) => write!(f, "cannot edit hardware: {reason}"),
+            Self::BaseIndexNotFound { index } => {
+                write!(f, "base at index {index} was not found")
+            }
+            Self::ProgramNotFound { index } => {
+                write!(f, "program at index {index} was not found")
+            }
+            Self::MissingProgramAttribute { index, attribute } => {
+                write!(f, "program at index {index} is missing {attribute}")
+            }
+            Self::MissingProgramName { index } => {
+                write!(f, "program at index {index} is missing its name text")
+            }
+            Self::MissingSymbols => write!(f, "workspace is missing its Symbols payload"),
+            Self::VariableNotFound { index } => {
+                write!(f, "variable at index {index} was not found")
+            }
+            Self::InvalidVariableRecord { index } => {
+                write!(
+                    f,
+                    "variable at index {index} does not match the supported symbol record layout"
+                )
+            }
+            Self::VariableFieldLengthChanged {
+                index,
+                field,
+                expected_utf16_units,
+                actual_utf16_units,
+            } => write!(
+                f,
+                "variable {index} {field} must keep its encoded length at {expected_utf16_units} UTF-16 units (got {actual_utf16_units})"
+            ),
+            Self::LadderCellNotFound {
+                program_index,
+                offset,
+            } => write!(
+                f,
+                "ladder cell at byte offset {offset} was not found in program {program_index}"
+            ),
+            Self::LadderCellChanged {
+                program_index,
+                offset,
+            } => write!(
+                f,
+                "ladder cell at byte offset {offset} in program {program_index} no longer matches the expected text"
+            ),
+            Self::LadderCellLengthChanged {
+                expected_utf16_units,
+                actual_utf16_units,
+            } => write!(
+                f,
+                "ladder cell edits must keep the encoded length at {expected_utf16_units} UTF-16 units (got {actual_utf16_units})"
+            ),
+            Self::UnsupportedLadderLayout => {
+                write!(f, "structural editing requires a verified LD record layout")
+            }
+            Self::InvalidLadderEdit { reason } => write!(f, "cannot edit ladder cell: {reason}"),
+            Self::BrowserHardwareEdit(reason) => write!(f, "hardware edit rejected: {reason}"),
+            Self::ProgramDeletion(reason) => write!(f, "program deletion rejected: {reason}"),
+            Self::ProgramReorder(reason) => write!(f, "program reorder rejected: {reason}"),
+            Self::GlobalVariableEdit(reason) => {
+                write!(f, "global variable edit rejected: {reason}")
+            }
+            Self::DocumentEdit(reason) => write!(f, "document edit rejected: {reason}"),
+            Self::ProjectRename(reason) => write!(f, "project rename rejected: {reason}"),
+            Self::ProgramCreation(reason) => write!(f, "program creation rejected: {reason}"),
+            Self::TextProgramEdit(reason) => write!(f, "text program edit rejected: {reason}"),
+            Self::SfcEdit(reason) => write!(f, "SFC edit rejected: {reason}"),
+            Self::BrowserNetworkEdit(reason) => write!(f, "network edit rejected: {reason}"),
+            Self::RewriteVerificationFailed => write!(
+                f,
+                "rewritten workspace failed XML or container preservation verification"
+            ),
+            Self::AuthenticatedRewriteUnsupported => write!(
+                f,
+                "cannot rewrite workspace: the container does not match the validated XG5000 header, alignment, or Security layout"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for XgwxError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(error) => Some(error),
+            Self::Inflate(error) => Some(error),
+            Self::Base64(error) => Some(error),
+            Self::Bzip2(error) => Some(error),
+            Self::Utf8(error) => Some(error),
+            Self::Xml(error) => Some(error),
+            _ => None,
+        }
+    }
+}

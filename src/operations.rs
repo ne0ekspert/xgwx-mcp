@@ -650,7 +650,10 @@ fn execute_update_network_module(
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct GenerateIoVariablesArgs {}
+struct GenerateIoVariablesArgs {
+    base: Option<u32>,
+    slot: Option<u32>,
+}
 
 fn schema_generate_io_variables() -> Value {
     serde_json::to_value(schema_for!(GenerateIoVariablesArgs)).expect("JSON Schema is serializable")
@@ -669,9 +672,8 @@ fn execute_generate_io_variables(
     doc: &mut XgwxDocument,
     args: &GenerateIoVariablesArgs,
 ) -> Result<(), String> {
-    let _ = args;
     doc.variable_mut()
-        .generate_io_variables()
+        .generate_io_variables_for(args.base, args.slot)
         .map_err(|error| error.to_string())
 }
 
@@ -5868,6 +5870,8 @@ pub fn list_operations(query: Option<&str>, subsystem: Option<&str>) -> Value {
         "count": selected.len(),
         "operations": selected.iter().map(|operation| json!({
             "name": operation.name,
+            "tool_name": crate::writer_tools::tool_name(operation.name),
+            "editing_route": crate::writer_tools::editing_route(operation.name),
             "subsystem": operation.subsystem,
             "description": operation.description,
             "adapter": operation.adapter,
@@ -6332,6 +6336,8 @@ pub fn describe_operation(name: &str) -> Result<Value, String> {
     }));
     Ok(json!({
         "name": operation.name,
+        "tool_name": crate::writer_tools::tool_name(operation.name),
+        "editing_route": crate::writer_tools::editing_route(operation.name),
         "subsystem": operation.subsystem,
         "description": operation.description,
         "adapter": operation.adapter,

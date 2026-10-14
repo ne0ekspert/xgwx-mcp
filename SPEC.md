@@ -2,16 +2,40 @@
 
 ## Purpose and dependencies
 
-Provide a local stdio MCP server that exposes every current public editing method on `libxgwx::XgwxDocument` while preserving the library's format restrictions. The server owns its Serde/Schemars protocol DTOs and depends on a commit-pinned [libxgwx Git dependency](https://github.com/ne0ekspert/libxgwx) with `write` and `il` enabled. Use the official Rust MCP SDK (`rmcp`), Tokio, Serde, and Schemars; retain resolved dependency versions in `Cargo.lock`.
+Provide a local stdio MCP server that exposes every current public editing method on `libxgwx::XgwxDocument` while preserving the library's format restrictions. The server owns its Serde/Schemars protocol DTOs and depends on a pinned published [libxgwx crate](https://github.com/ne0ekspert/libxgwx), with a package-relative vendored patch for scoped I/O generation and empty local-symbol tables, with `write` and `il` enabled. Use the official Rust MCP SDK (`rmcp`), Tokio, Serde, and Schemars; retain resolved dependency versions in `Cargo.lock`.
 
 Do not edit MCP client configuration, contact a PLC, deploy the server, prune backups, or modify unrelated checkouts as part of normal server use.
 
 ## MCP interface
 
+Use `get_ir` → `apply_patch` as the default editing workflow. Export the
+current revision-scoped program or property document, change only supported
+editable statements, and submit an exact unified diff. The server derives writer
+arguments and expected values internally and retains its native guards, backup
+and atomic-save behavior.
+
+Only capabilities outside IR coverage have direct `xgwx_<operation_name>` tools.
+Their complete input schemas are included in `tools/list`. Catalog responses
+include `editing_route` and `tool_name`: a null tool name means the writer is
+internal to patches; partial coverage retains a direct tool for the remaining
+capabilities. Library writer names in reference examples identify internal APIs,
+not necessarily callable MCP tools.
+
+`apply_edits` and initial `create_file.operations` accept only the closed union
+of these exposed gap writers. Patch-covered operations return `patch_required`
+before any file changes. Create a project first, then export and patch it to
+populate its supported program/property content.
+
+
+IEC program IR adds one contact_insert/parallel_contact/wire_restore statement bound to an exported readonly site, or one comment_row using a captured native template. These authoring edits retain native offset, operand and layout guards and require unchanged source/context statements.
+
+Program IR supports one blank-row or captured simple IEC rung lifecycle mutation per patch. Retain all other statements; save and re-export after shifted rows. Blank deletion and rung deletion use captured markers and native preconditions. XGK row insertion is covered; general XGK rung deletion remains a gap.
+
 All tool arguments and inspection DTO fields use snake_case. Operation names are public Rust method names. Preserve compatibility aliases and identify their canonical handler in the operation catalog and coverage manifest.
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
+| `xgwx_<operation_name>` | Execute one remaining direct gap writer with `path`, `expected_revision`, its exact typed `args`, and optional `dry_run`. |
 | `list_templates` | none | Compatibility profile IDs, default names/CPU, generated hashes, identity policy and probed compatible CPU models. |
 | `create_file` | `path`, optional `project_name`, `program_name`, `cpu_model`, `program_language`, `template`, `operations=[]`, `dry_run=false` | Created file revision, selected names/CPU/language, template, results and validation; no original revision or backup. |
 | `inspect_file` | `path`, `section="overview"`, optional `program_index`, `offset=0`, `limit=100` | `{path, revision, data}` |
@@ -175,6 +199,12 @@ canonical roots/additional roots, missing parents, write/publication failures,
 competing server stores, real stdio discovery/schema/preview/create/inspection/IR,
 and a first ordinary backed-up edit.
 
+The edit_browser_network and edit_fenet_field writers are patch-only. Network
+property IR must cover their four metadata fields and all 15 supported FEnet
+fields when present, retain quoted decoded-value formats, and keep absent fields
+readonly. Preserve native value/identity guards and expose neither writer through
+the direct catalog, apply_edits union, nor create_file.operations union.
+
 ## Property documents
 
 Expose complete xgwx-properties/1 exports for modules, variables and networks.
@@ -190,9 +220,12 @@ explicit mapping; retain readonly derived storage/allocation metadata and
 instance/unsupported addresses. Route address edits through the existing
 expected-name/address writer and preserve its area, width and overlap guards.
 
-Support module comments/decoded options, global name/address/type/description,
+Support module native names/comments/decoded options, global name/address/type/description,
 IEC local name/type/address/description, guarded network names/module metadata and
-exported Cnet/FEnet settings. Coalesce global fields per index and Cnet settings
+exported Cnet/FEnet settings. Expose module native_name only when the existing bounded writer accepts the
+current CPU/layout and unique coordinates. Omit ID/subtype, keep native_name readonly, and expose supported catalog model changes as sole mutations;
+omit raw Details; expose only supported decoded option values. Coalesce native
+name/comment changes per base/slot into one update_module patch. Coalesce global fields per index and Cnet settings
 per base/slot so native interdependent guards run on one proposed result.
 Preserve positional program patch compatibility; program_index stays required
 when section defaults to program. Property patches use the same rollback,

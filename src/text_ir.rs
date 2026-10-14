@@ -1,6 +1,8 @@
 //! Revision-scoped, positional ladder projection. The original document remains
 //! the source of truth; this IR is lowered only through public guarded writers.
 
+mod rows;
+mod sites;
 use crate::storage::{EditOperation, StoreError};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -389,6 +391,8 @@ pub struct Projection {
     isolated: BTreeSet<String>,
     sfc: Option<crate::sfc_ir::Projection>,
     text_program: Option<xgwx::TextProgram>,
+    rows: rows::Lifecycle,
+    sites: sites::Sites,
 }
 impl Projection {
     pub fn export(doc: &XgwxDocument, revision: &str, index: usize) -> Result<Self, StoreError> {
@@ -438,6 +442,8 @@ impl Projection {
                 isolated: BTreeSet::new(),
                 sfc: None,
                 text_program: Some(program),
+                rows: rows::Lifecycle::default(),
+                sites: sites::Sites::default(),
             });
         }
         if let Some(program) = doc
@@ -456,6 +462,8 @@ impl Projection {
                 isolated: BTreeSet::new(),
                 sfc: Some(sfc),
                 text_program: None,
+                rows: rows::Lifecycle::default(),
+                sites: sites::Sites::default(),
             });
         }
         let program = doc
@@ -1065,6 +1073,12 @@ impl Projection {
         }
         text.push_str(&operand_metadata);
         text.push_str("}\n");
+        let (sites, site_text) = sites::Sites::export(doc, index, iec, &text)?;
+        let (rows, row_text) = rows::Lifecycle::export(doc, index, iec, &text)?;
+        text.truncate(text.len() - 2);
+        text.push_str(&row_text);
+        text.push_str(&site_text);
+        text.push_str("}\n");
         parse(&text)?;
         Ok(Self {
             text,
@@ -1075,6 +1089,8 @@ impl Projection {
             isolated,
             sfc: None,
             text_program: None,
+            rows,
+            sites,
         })
     }
 
@@ -1145,8 +1161,24 @@ impl Projection {
             return sfc.lower_patch(patch);
         }
         let edited = apply_unified_patch(&self.text, patch)?;
-        let before = parse(&self.text)?;
         let after = parse(&edited)?;
+        if let Some(ops) = self.rows.lower(
+            &self.text,
+            &edited,
+            self.program_index,
+            self.dialect == "IEC",
+        )? {
+            return Ok(ops);
+        }
+        if let Some(ops) = self.sites.lower(
+            &self.text,
+            &edited,
+            self.program_index,
+            self.dialect == "IEC",
+        )? {
+            return Ok(ops);
+        }
+        let before = parse(&self.text)?;
         if before.frozen != after.frozen {
             return Err(unsupported(
                 "program/rung identities, derived connections, instructions and opaque records are read-only in text IR v1",
@@ -1289,9 +1321,12 @@ impl Projection {
                         ));
                     }
                     if replacement.is_empty() {
-                        return Err(unsupported(
-                            "empty function operands invoke structural deletion; use the direct output-operand deletion operation and re-export",
-                        ));
+                        if direction != "OUTPUT" {
+                            return Err(unsupported(
+                                "only function output operands can be cleared",
+                            ));
+                        }
+                        topology_change = true;
                     }
                     ops.push(make("update_iec_ld_function_operand",json!({"program_index":p,"offset":offset,"expected":value,"replacement":replacement})));
                     work.push((*offset, ops));
@@ -1925,7 +1960,15 @@ fn parse(text: &str) -> Result<Parsed, StoreError> {
         if t.is_empty() {
             continue;
         }
-        for id in t.iter().filter(|s| s.starts_with('@')) {
+        let site_authoring = matches!(
+            t[0].as_str(),
+            "contact_insert" | "parallel_contact" | "wire_restore" | "comment_row"
+        );
+        for (_, id) in t
+            .iter()
+            .enumerate()
+            .filter(|(i, s)| s.starts_with('@') && (!site_authoring || *i == 1))
+        {
             if !ids.insert(id.clone()) {
                 return Err(error(format!("duplicate identity {id}")));
             }

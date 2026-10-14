@@ -1,12 +1,17 @@
 # Standalone ST and IEC IL
 
+Default to `get_ir` → `apply_patch` for supported edits. Writer names below
+identify library APIs and argument shapes. Consult `describe_operation.editing_route`:
+`tool_name:null` means use patches; a non-null `tool_name` identifies an exposed
+gap tool. `apply_edits` and creation operation arrays reject patch-covered writers.
+
 ## Create and inspect
 
 Discover CPU choices with `list_templates`, then create with
 `{"path":"control.xgwx","project_name":"Control","cpu_model":"XGI-CPUE","program_language":"ST","program_name":"Main","dry_run":true}`.
 Repeat with dry_run false. Use language `IL` for IEC IL. XGK ladder-generated IL
 is a different format; do not route standalone IEC IL through ladder editing.
-`create_program` adds ST/IL to an existing supported IEC project with fresh
+The full `programs` property export adds ST/IL to an existing supported IEC project with generated
 ObjectId/SymbolId GUIDs and a unique program name. Re-inspect indices afterward.
 
 Inspect `{"path":"control.xgwx","section":"text","program_index":0}`.

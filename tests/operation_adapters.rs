@@ -22,6 +22,7 @@ fn public_mutators(source: &str) -> BTreeSet<String> {
             && source.contains("pub struct NetworkModuleEditor<'a>"))
         || source.contains("pub struct ConfigurationEditor<'a>")
         || source.contains("pub struct ProjectEditor<'a>")
+        || source.contains("pub struct VariableEditor<'a>")
         || source.contains("pub struct GlobalVariableEditor<'a>");
     for tail in source.split("pub fn ").skip(1) {
         let Some(signature_end) = tail.find("->") else {
@@ -84,7 +85,9 @@ fn public_mutators(source: &str) -> BTreeSet<String> {
             .filter(|operation| body.contains(&format!(".{}(", operation.name)))
             .map(|operation| operation.name.to_owned())
             .collect::<Vec<_>>();
-        if !backends.is_empty() {
+        if name == "generate_io_variables_for" && body.contains(".generate_io_variables_for(") {
+            writers.insert("generate_io_variables".into());
+        } else if !backends.is_empty() {
             writers.extend(backends);
         } else if name == "rename" && body.contains("self.rename_if(") {
             writers.insert("rename_project".into());

@@ -11,6 +11,28 @@ use test_support::fixture_root;
 
 #[tokio::test]
 async fn all_tools_declare_four_boolean_behavior_hints() {
+    fn check_references(value: &Value, root: &Value) {
+        match value {
+            Value::Object(object) => {
+                if let Some(Value::String(reference)) = object.get("$ref") {
+                    let pointer = reference.strip_prefix('#').expect("local schema reference");
+                    assert!(
+                        root.pointer(pointer).is_some(),
+                        "unresolved schema reference {reference}"
+                    );
+                }
+                for value in object.values() {
+                    check_references(value, root);
+                }
+            }
+            Value::Array(values) => {
+                for value in values {
+                    check_references(value, root);
+                }
+            }
+            _ => {}
+        }
+    }
     let dir = tempfile::tempdir().unwrap();
     let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_xgwx-mcp"));
     command.current_dir(dir.path());
@@ -20,7 +42,70 @@ async fn all_tools_declare_four_boolean_behavior_hints() {
         .unwrap();
     let tools = client.list_all_tools().await.unwrap();
     assert!(!tools.is_empty());
+    let writer_count = tools
+        .iter()
+        .filter(|tool| tool.name.starts_with("xgwx_"))
+        .count();
+    assert!(writer_count < xgwx_mcp::operations::OPERATIONS.len());
+    for operation in xgwx_mcp::operations::OPERATIONS {
+        let name = format!("xgwx_{}", operation.name);
+        let metadata = xgwx_mcp::operations::describe_operation(operation.name).unwrap();
+        if metadata["tool_name"].is_null() {
+            assert!(!tools.iter().any(|tool| tool.name == name));
+            assert_eq!(metadata["editing_route"]["tool"], "apply_patch");
+            assert_eq!(metadata["editing_route"]["coverage"], "complete");
+            continue;
+        }
+        let name = metadata["tool_name"].as_str().unwrap();
+        let tool = tools.iter().find(|tool| tool.name == name).unwrap();
+        assert_eq!(tool.input_schema["additionalProperties"], json!(false));
+        if operation.name == "generate_io_variables" {
+            assert!(tool.input_schema["properties"]["base"].is_object());
+            assert!(tool.input_schema["properties"]["slot"].is_object());
+            assert!(tool.input_schema["properties"].get("args").is_none());
+            continue;
+        }
+        assert_eq!(
+            tool.input_schema["required"],
+            json!(["path", "expected_revision", "args"])
+        );
+        let mut argument_schema = (operation.schema)();
+        argument_schema.as_object_mut().unwrap().remove("$schema");
+        argument_schema.as_object_mut().unwrap().remove("$defs");
+        assert_eq!(
+            tool.input_schema["properties"]["args"], argument_schema,
+            "{name}"
+        );
+    }
+    for name in ["apply_edits", "create_file"] {
+        let tool = tools.iter().find(|tool| tool.name == name).unwrap();
+        let variants = tool.input_schema["properties"]["operations"]["items"]["oneOf"]
+            .as_array()
+            .unwrap();
+        assert_eq!(variants.len(), writer_count + 1);
+        for variant in variants {
+            let operation = variant["properties"]["name"]["const"].as_str().unwrap();
+            let direct = tools
+                .iter()
+                .find(|tool| {
+                    tool.name
+                        == xgwx_mcp::operations::describe_operation(operation).unwrap()["tool_name"]
+                            .as_str()
+                            .unwrap()
+                })
+                .unwrap();
+            if operation == "generate_io_variables" {
+                continue;
+            }
+            assert_eq!(
+                variant["properties"]["args"],
+                direct.input_schema["properties"]["args"]
+            );
+        }
+    }
     for tool in tools {
+        let schema = serde_json::to_value(&tool.input_schema).unwrap();
+        check_references(&schema, &schema);
         // Check the serialized discovery contract, including presence and type.
         let value = serde_json::to_value(&tool).unwrap();
         let annotations = &value["annotations"];
@@ -51,9 +136,10 @@ async fn all_tools_declare_four_boolean_behavior_hints() {
             // Creation never overwrites; preparation allocates a new session token.
             "create_file" | "prepare_change" => (false, false, false),
             // Backups and dry-run options do not make these tools read-only or additive.
-            "rename_program" | "commit_change" | "apply_edits" | "apply_patch" => {
+            "generate_io_variables" | "commit_change" | "apply_edits" | "apply_patch" => {
                 (false, true, false)
             }
+            name if name.starts_with("xgwx_") => (false, true, false),
             name => panic!("Classify the behavior hints for new tool {name}"),
         };
         assert_eq!(
@@ -75,6 +161,95 @@ async fn all_tools_declare_four_boolean_behavior_hints() {
             tool.name
         );
         assert_eq!(annotations["openWorldHint"], json!(false), "{}", tool.name);
+    }
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn patch_only_writers_cannot_be_called_through_selectors_or_old_tools() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_xgwx-mcp"));
+    command.current_dir(dir.path());
+    let client = ClientConfig::default()
+        .serve(TokioChildProcess::new(command).unwrap())
+        .await
+        .unwrap();
+    for operation in [
+        "update_variable",
+        "set_module_option",
+        "edit_text_program",
+        "insert_ladder_instruction",
+        "update_module",
+        "edit_browser_network",
+        "edit_fenet_field",
+        "update_ladder_cell_text",
+        "update_iec_ld_function_operand",
+        "replace_sfc_sequence",
+        "edit_sfc_variable",
+        "rename_project",
+        "update_program",
+        "create_program",
+        "delete_program",
+        "move_program",
+        "select_module",
+        "insert_iec_local_symbol",
+        "delete_iec_local_symbol",
+        "insert_iec_ld_no_contact",
+        "insert_iec_ld_contact",
+        "insert_iec_ld_leading_contact",
+        "insert_iec_ld_short_wire_contact",
+        "repair_iec_ld_horizontal_wire",
+        "insert_iec_ld_parallel_contact",
+        "insert_iec_ld_parallel_contact_kind",
+        "insert_iec_ld_comment",
+        "insert_iec_ld_blank_row",
+        "delete_iec_ld_blank_row",
+        "insert_iec_ld_linear_rung",
+        "insert_iec_ld_rung",
+        "delete_iec_ld_linear_rung",
+        "delete_iec_ld_rung",
+        "insert_ladder_row",
+    ] {
+        let selected = json!({"name":operation,"args":{}});
+        for name in ["apply_edits", "create_file"] {
+            let mut args = json!({"path":"absent.xgwx", "operations":[
+                {"name":"update_network","args":{}}, selected
+            ]});
+            if name == "apply_edits" {
+                args["expected_revision"] = json!("unread-source");
+            }
+            let result = client
+                .call_tool(
+                    CallToolRequestParams::new(name)
+                        .with_arguments(args.as_object().unwrap().clone()),
+                )
+                .await
+                .unwrap();
+            assert_eq!(result.is_error, Some(true));
+            let error = &result.structured_content.unwrap()["error"];
+            assert_eq!(error["code"], "patch_required");
+            assert_eq!(error["operation_index"], 1);
+            assert_eq!(error["recovery"]["tools"], json!(["get_ir", "apply_patch"]));
+            assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+        }
+        let old_tool = client
+            .call_tool(
+                CallToolRequestParams::new(format!("xgwx_{operation}")).with_arguments(
+                    json!({"path":"absent.xgwx","expected_revision":"unread-source","args":{}})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                ),
+            )
+            .await;
+        assert!(old_tool.is_err());
+    }
+    let tools = client.list_all_tools().await.unwrap();
+    for name in ["xgwx_select_cpu", "xgwx_edit_text_variable"] {
+        assert!(
+            tools.iter().any(|tool| tool.name == name),
+            "missing gap tool {name}"
+        );
     }
     client.cancel().await.unwrap();
 }
@@ -102,11 +277,14 @@ async fn real_stdio_inspection_schema_dry_run_edit_and_validation() {
     let tools = client.list_all_tools().await.unwrap();
     let names: std::collections::BTreeSet<_> = tools.iter().map(|t| t.name.as_ref()).collect();
     assert_eq!(
-        names,
+        names
+            .iter()
+            .copied()
+            .filter(|name| !name.starts_with("xgwx_"))
+            .collect::<std::collections::BTreeSet<_>>(),
         [
             "inspect_file",
             "search_project",
-            "rename_program",
             "prepare_change",
             "commit_change",
             "list_modules",
@@ -119,6 +297,7 @@ async fn real_stdio_inspection_schema_dry_run_edit_and_validation() {
             "describe_operation",
             "apply_edits",
             "validate_file",
+            "generate_io_variables",
             "get_ir",
             "apply_patch"
         ]
@@ -188,16 +367,46 @@ async fn real_stdio_inspection_schema_dry_run_edit_and_validation() {
         .structured_content
         .unwrap();
     assert!(schema["argument_schema"]["properties"]["program_index"].is_object());
-    let operations = json!([{"name":"update_program","args":{"program_index":0,"patch":{"comment":"Real stdio MCP test"}}}]);
-    let preview = client.call_tool(call("apply_edits",json!({"path":"project.xgwx","expected_revision":rev,"operations":operations,"dry_run":true}))).await.unwrap();
+    let ir = client
+        .call_tool(call(
+            "get_ir",
+            json!({"path":"project.xgwx","section":"programs","program_index":0}),
+        ))
+        .await
+        .unwrap()
+        .structured_content
+        .unwrap();
+    let text = ir["text"].as_str().unwrap();
+    let line = text
+        .lines()
+        .find(|l| l.starts_with("  edit comment = "))
+        .unwrap();
+    let n = text.lines().position(|l| l == line).unwrap() + 1;
+    let patch = format!(
+        "--- old\n+++ new\n@@ -{n},1 +{n},1 @@\n-{line}\n+  edit comment = \"Real stdio MCP test\"\n"
+    );
+    let args = json!({"path":"project.xgwx","expected_revision":rev,"section":"programs","program_index":0,"patch":patch});
+    for key in ["unknown_field", "operation"] {
+        let mut invalid = args.clone();
+        invalid[key] = json!(true);
+        let rejected = client
+            .call_tool(call("apply_patch", invalid))
+            .await
+            .unwrap();
+        assert_eq!(rejected.is_error, Some(true));
+        assert_eq!(fs::read(&path).unwrap(), original);
+    }
+    let mut preview_args = args.clone();
+    preview_args["dry_run"] = json!(true);
+    let preview = client
+        .call_tool(call("apply_patch", preview_args))
+        .await
+        .unwrap();
     assert_ne!(preview.is_error, Some(true));
     assert_eq!(fs::read(&path).unwrap(), original);
     assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     let saved = client
-        .call_tool(call(
-            "apply_edits",
-            json!({"path":"project.xgwx","expected_revision":rev,"operations":operations}),
-        ))
+        .call_tool(call("apply_patch", args.clone()))
         .await
         .unwrap();
     assert_ne!(saved.is_error, Some(true));
@@ -228,13 +437,7 @@ async fn real_stdio_inspection_schema_dry_run_edit_and_validation() {
         stale_search.structured_content.unwrap()["error"]["code"],
         "stale_revision"
     );
-    let stale = client
-        .call_tool(call(
-            "apply_edits",
-            json!({"path":"project.xgwx","expected_revision":rev,"operations":operations}),
-        ))
-        .await
-        .unwrap();
+    let stale = client.call_tool(call("apply_patch", args)).await.unwrap();
     assert_eq!(stale.is_error, Some(true));
     assert_eq!(
         stale.structured_content.unwrap()["error"]["code"],
@@ -523,18 +726,30 @@ async fn real_stdio_iec_connected_deletion_and_physical_wire_transactions() {
             .unwrap()
             .structured_content
             .unwrap();
-        let setup = json!([
-            {"name":"insert_iec_ld_single_element","args":{"program_index":0,"row_index":0,"raw_x":1,"category":"contact","kind":"NO","operand":"%MX0"}},
-            {"name":"insert_iec_ld_single_element","args":{"program_index":0,"row_index":0,"raw_x":94,"category":"coil","kind":"OUTPUT","operand":"%MX1"}}
-        ]);
-        let result = client
-            .call_tool(call(
-                "apply_edits",
-                json!({"path":path,"expected_revision":initial["revision"],"operations":setup}),
-            ))
+        let initial_ir = client
+            .call_tool(call("get_ir", json!({"path":path,"program_index":0})))
             .await
+            .unwrap()
+            .structured_content
             .unwrap();
-        assert_ne!(result.is_error, Some(true));
+        let text = initial_ir["text"].as_str().unwrap();
+        let marker = "  canvas @p0.blank at(group=0,row=0) readonly";
+        assert!(text.contains(marker));
+        let edited = text.replace(marker, &format!("{marker}\n  contact @new-input at(group=0,row=0,x=1) NO \"%MX0\"\n  coil @new-output at(group=0,row=0,x=94) OUT \"%MX1\""));
+        let patch = format!(
+            "@@ -1,{} +1,{} @@\n{}{}",
+            text.lines().count(),
+            edited.lines().count(),
+            text.lines()
+                .map(|line| format!("-{line}\n"))
+                .collect::<String>(),
+            edited
+                .lines()
+                .map(|line| format!("+{line}\n"))
+                .collect::<String>()
+        );
+        let result = client.call_tool(call("apply_patch", json!({"path":path,"program_index":0,"expected_revision":initial["revision"],"patch":patch}))).await.unwrap();
+        assert_ne!(result.is_error, Some(true), "{:?}", result);
         let original = fs::read(dir.path().join(path)).unwrap();
         let ir = client
             .call_tool(call("get_ir", json!({"path":path,"program_index":0})))
@@ -1094,7 +1309,7 @@ async fn real_stdio_template_discovery_create_preview_save_and_first_edit() {
     for template in ["xgk_ld", "xgi_ld", "xgi_sfc"] {
         let path = format!("{template}.xgwx");
         let count = fs::read_dir(dir.path()).unwrap().count();
-        let mut args = json!({"path":path,"project_name":"Factory & Line 1","program_name":"Main","cpu_model":if template == "xgk_ld" {"XGK-CPUH"} else {"XGI-CPUE"},"program_language":if template == "xgi_sfc" {"SFC"} else {"LD"},"operations":[{"name":"update_program","args":{"program_index":0,"patch":{"comment":"Created over MCP"}}}],"dry_run":true});
+        let mut args = json!({"path":path,"project_name":"Factory & Line 1","program_name":"Main","cpu_model":if template == "xgk_ld" {"XGK-CPUH"} else {"XGI-CPUE"},"program_language":if template == "xgi_sfc" {"SFC"} else {"LD"},"dry_run":true});
         let preview = client
             .call_tool(call("create_file", args.clone()))
             .await
@@ -1143,7 +1358,25 @@ async fn real_stdio_template_discovery_create_preview_save_and_first_edit() {
                 _ => "SFC",
             }
         );
-        let edited=client.call_tool(call("apply_edits",json!({"path":path,"expected_revision":saved["revision_after"],"operations":[{"name":"update_program","args":{"program_index":0,"patch":{"comment":"First ordinary edit"}}}]}))).await.unwrap();
+        let properties = client
+            .call_tool(call(
+                "get_ir",
+                json!({"path":path,"section":"programs","program_index":0}),
+            ))
+            .await
+            .unwrap()
+            .structured_content
+            .unwrap();
+        let text = properties["text"].as_str().unwrap();
+        let line = text
+            .lines()
+            .find(|l| l.starts_with("  edit comment = "))
+            .unwrap();
+        let n = text.lines().position(|l| l == line).unwrap() + 1;
+        let patch = format!(
+            "--- old\n+++ new\n@@ -{n},1 +{n},1 @@\n-{line}\n+  edit comment = \"First ordinary edit\"\n"
+        );
+        let edited = client.call_tool(call("apply_patch",json!({"path":path,"expected_revision":saved["revision_after"],"section":"programs","program_index":0,"patch":patch}))).await.unwrap();
         assert_ne!(edited.is_error, Some(true));
         assert_eq!(
             fs::read(
@@ -1183,6 +1416,11 @@ async fn real_stdio_focused_lists_property_exports_and_guarded_patch_transaction
         .and_then(|mut selected_record| selected_record.insert_module(0, "XGI-D24A/B"))
         .unwrap();
     doc.variable_mut().generate_io_variables().unwrap();
+    doc.base_mut()
+        .by_number(0)
+        .unwrap()
+        .insert_module(1, "XGL-EFMT(B)")
+        .unwrap();
     fs::write(
         dir.path().join("sample.xgwx"),
         doc.to_verified_bytes().unwrap(),
@@ -1228,10 +1466,25 @@ async fn real_stdio_focused_lists_property_exports_and_guarded_patch_transaction
         .unwrap();
     assert_eq!(vars["data"]["global"]["total"], 32);
     assert_eq!(vars["data"]["global"]["next_offset"], 1);
+    let replacement_model = serde_json::to_string(
+        xgwx::xgk_module_catalog()
+            .iter()
+            .find(|e| e.model.starts_with("XGQ-") && e.slot_span == 1)
+            .unwrap()
+            .model,
+    )
+    .unwrap();
     for (section, property, replacement) in [
         ("modules", "  edit option.inputFilter.0 = ", "3"),
         ("variables", "  edit description = ", "\"Start input\""),
         ("networks", "  edit name = ", "\"Plant network\""),
+        ("networks", "  edit alias = ", "\"Line 1\""),
+        ("networks", "  edit description = ", "\"Plant Ethernet\""),
+        ("networks", "  edit ipAddress = ", "\"10.20.30.40\""),
+        ("networks", "  edit dhcp = ", "\"1\""),
+        ("networks", "  edit driverType = ", "\"5\""),
+        ("networks", "  edit config_name = ", "\"Ethernet Line 1\""),
+        ("modules", "  edit model = ", replacement_model.as_str()),
     ] {
         let exported = client
             .call_tool(call(
@@ -1243,6 +1496,15 @@ async fn real_stdio_focused_lists_property_exports_and_guarded_patch_transaction
             .structured_content
             .unwrap();
         assert_eq!(exported["format"], "xgwx-properties/1");
+        if section == "modules" {
+            assert!(
+                !exported["text"]
+                    .as_str()
+                    .unwrap()
+                    .lines()
+                    .any(|line| line.contains(" details = "))
+            );
+        }
         let text = exported["text"].as_str().unwrap();
         let (i, old) = text
             .lines()
@@ -1260,7 +1522,7 @@ async fn real_stdio_focused_lists_property_exports_and_guarded_patch_transaction
             .call_tool(call("apply_patch", args.clone()))
             .await
             .unwrap();
-        assert_ne!(preview.is_error, Some(true));
+        assert_ne!(preview.is_error, Some(true), "{property}: {preview:?}");
         let preview = preview.structured_content.unwrap();
         assert!(preview["backup_path"].is_null());
         args["dry_run"] = json!(false);

@@ -174,7 +174,7 @@ def render(name: str, topics: list[dict], metadata: dict | None, override: dict,
     route = metadata.get("writer_operation") if metadata else None
     if route:
         native = metadata["native_mnemonic"]
-        lines += [f"Use `{route}` after calling `describe_operation` for its current schema."]
+        lines += [f"Use `get_ir` → `apply_patch` for this instruction edit. `{route}` is the internal writer route, not a separate MCP tool. Preserve the exported revision and native constraints."]
         if metadata["kind"] == "diagram_element":
             lines += [f"Set the replacement element kind to `{metadata['element_kind']}`. `{name}` describes `{metadata.get('placement', 'cell')}` placement; it is represented by a physical cell rather than an application opcode."]
         else:

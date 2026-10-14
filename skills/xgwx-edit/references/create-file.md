@@ -1,5 +1,10 @@
 # Creating a new project file
 
+Default to `get_ir` → `apply_patch` for supported edits. Writer names below
+identify library APIs and argument shapes. Consult `describe_operation.editing_route`:
+`tool_name:null` means use patches; a non-null `tool_name` identifies an exposed
+gap tool. `apply_edits` and creation operation arrays reject patch-covered writers.
+
 Use `list_templates()` before creating a project. No existing project path is
 needed. It returns `xgk_ld`, `xgi_ld`, and `xgi_sfc`, their native default CPU,
 selectable CPU models, source hashes, identity policy and a flattened

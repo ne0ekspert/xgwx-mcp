@@ -23,7 +23,7 @@ impl XgwxServer {
         Self {
             store,
             prepared: Default::default(),
-            tool_router: Self::tool_router(),
+            tool_router: crate::writer_tools::register(Self::tool_router()),
         }
     }
 }
@@ -77,10 +77,23 @@ pub struct ApplyRequest {
     pub path: String,
     /// SHA-256 revision returned by inspect_file, validate_file, or a committed apply_edits.
     pub expected_revision: String,
-    /// Ordered edits forming one transaction. Arguments follow describe_operation schemas.
+    /// Ordered edits from the closed union of independently exposed writer tools.
     pub operations: Vec<EditOperation>,
     /// Run the same edits and verification without changing disk. Returned revision_after
     /// describes the proposed output; the source retains revision_before.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GenerateIoRequest {
+    pub path: String,
+    pub expected_revision: String,
+    /// Optional base filter. Omission selects all bases.
+    pub base: Option<u32>,
+    /// Optional physical slot filter. Without base, selects this slot on every base.
+    pub slot: Option<u32>,
     #[serde(default)]
     pub dry_run: bool,
 }
@@ -91,7 +104,7 @@ pub struct IrRequest {
     pub path: String,
     /// Document-order ladder, SFC or standalone ST/IL program index. SFC exports selected charts and local declarations.
     pub program_index: Option<usize>,
-    /// program (default), modules, variables or networks. Subsystem exports mark edit/readonly properties.
+    /// program (default), project, programs, modules, variables or networks. Subsystem exports mark edit/readonly properties.
     #[serde(default = "program_section")]
     pub section: String,
 }
@@ -102,7 +115,7 @@ pub struct PatchRequest {
     /// Current file SHA-256 returned by get_ir. Re-export after structural edits.
     pub expected_revision: String,
     pub program_index: Option<usize>,
-    /// Same section used in get_ir: program (default), modules, variables or networks.
+    /// Same section used in get_ir: program (default), project, programs, modules, variables or networks.
     #[serde(default = "program_section")]
     pub section: String,
     /// Exact unified diff against the text returned by get_ir; no fuzzy matching.
@@ -171,22 +184,15 @@ pub struct ModuleCatalogRequest {
     pub limit: usize,
 }
 
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct RenameProgramRequest {
-    pub path: String,
-    pub object_ref: String,
-    pub name: String,
-    #[serde(default)]
-    pub dry_run: bool,
-}
-
 fn result(value: Result<Value, StoreError>) -> CallToolResult {
     match value {
         Ok(value) => CallToolResult::structured(value),
         Err(error) => {
             let mut detail = json!(error);
             let recovery = match error.code {
+                "patch_required" => Some(
+                    json!({"action":"export_and_patch", "tools":["get_ir","apply_patch"], "instruction":"Export the current revision-scoped document, change supported editable statements and submit an exact unified diff. This writer is internal to the patch interface and is not accepted by batch or creation operation selectors."}),
+                ),
                 "stale_revision" => Some(
                     json!({"action":"reinspect","tools":["search_project","inspect_file","list_modules"],"instruction":"Read the current target and rebuild the change with a new reference/revision; do not replace the hash on stale coordinates."}),
                 ),
@@ -222,12 +228,18 @@ fn result(value: Result<Value, StoreError>) -> CallToolResult {
         }
     }
 }
-async fn blocking(
+pub(crate) async fn blocking(
     task: impl FnOnce() -> Result<Value, StoreError> + Send + 'static,
 ) -> CallToolResult {
     match tokio::task::spawn_blocking(task).await {
         Ok(value) => result(value),
         Err(error) => result(Err(StoreError::new("internal_error", error))),
+    }
+}
+
+impl XgwxServer {
+    pub(crate) fn file_store(&self) -> FileStore {
+        self.store.clone()
     }
 }
 
@@ -247,7 +259,7 @@ impl XgwxServer {
     }
 
     #[tool(
-        description = "Generate a new .xgwx project through libxgwx for an xgk_ld, xgi_ld, xgi_sfc, xgi_st or xgi_il creation profile. Optionally select a supported CPU and apply ordered initial writer edits. Verify before atomic no-clobber creation; never overwrite an existing file, directory or symlink. Parent must exist within allowed roots. Choose project_name, path, cpu_model, program_language and optional program_name. Template is optional and derived from CPU/language. Discover creation_choices with list_templates. Library default identities are preserved. No original exists to back up. dry_run creates no files or sidecars; inspect the saved revision before further edits. Native acceptance remains separate.",
+        description = "Generate a new .xgwx project through libxgwx for an xgk_ld, xgi_ld, xgi_sfc, xgi_st or xgi_il creation profile. Optionally select a supported CPU and apply ordered initial direct-gap writer edits. Patch-covered operations are rejected in initial operations; inspect the created file and use get_ir/apply_patch to populate it. Verify before atomic no-clobber creation; never overwrite an existing file, directory or symlink. Parent must exist within allowed roots. Choose project_name, path, cpu_model, program_language and optional program_name. Template is optional and derived from CPU/language. Discover creation_choices with list_templates. Library default identities are preserved. No original exists to back up. dry_run creates no files or sidecars; inspect the saved revision before further edits. Native acceptance remains separate.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -261,6 +273,7 @@ impl XgwxServer {
     ) -> CallToolResult {
         let store = self.store.clone();
         blocking(move || {
+            crate::writer_tools::validate_direct_operations(&request.operations)?;
             store.create_project(&crate::storage::CreateProjectOptions {
                 path: request.path,
                 template: request.template,
@@ -344,33 +357,6 @@ impl XgwxServer {
         .await
     }
 
-    #[tool(
-        description = "Rename one program using its object_ref from search_project or inspect_file. Derives identity/revision guards and saves one verified transaction with backup. dry_run returns before/after values without saving. Use prepare_change for a reusable preview token.",
-        annotations(
-            read_only_hint = false,
-            destructive_hint = true,
-            idempotent_hint = false,
-            open_world_hint = false
-        )
-    )]
-    async fn rename_program(
-        &self,
-        Parameters(request): Parameters<RenameProgramRequest>,
-    ) -> CallToolResult {
-        let store = self.store.clone();
-        blocking(move || {
-            crate::common::apply(
-                &store,
-                &request.path,
-                crate::common::Change::RenameProgram {
-                    object_ref: request.object_ref,
-                    name: request.name,
-                },
-                request.dry_run,
-            )
-        })
-        .await
-    }
     #[tool(
         description = "Prepare 1–128 common changes as one verified dry-run transaction. Each change uses an inspected object_ref. Returns readable target/field/before/after values, validation, exact candidate hash and a session-scoped change_token lasting 30 minutes. Creates no files or sidecars; does not save. Review the result then call commit_change with the token.",
         annotations(
@@ -545,7 +531,7 @@ impl XgwxServer {
     }
 
     #[tool(
-        description = "Apply ordered edits as one transaction to an XGWX file. Requires the current revision. Saves immediately with a unique adjacent backup and atomic replacement after verification. dry_run performs no disk changes. A failed operation leaves source bytes unchanged; re-inspect after structural changes.",
+        description = "Apply ordered edits from the closed schema union of independently exposed xgwx_<operation_name> tools as one atomic transaction. Patch-covered writers are rejected; use get_ir and apply_patch for those edits. No additional operations are available through this batch tool. Requires the current revision. Saves immediately with a unique adjacent backup and atomic replacement after verification. dry_run performs no disk changes. A failed operation leaves source bytes unchanged; re-inspect after structural changes.",
         annotations(
             read_only_hint = false,
             destructive_hint = true,
@@ -556,6 +542,7 @@ impl XgwxServer {
     async fn apply_edits(&self, Parameters(request): Parameters<ApplyRequest>) -> CallToolResult {
         let store = self.store.clone();
         blocking(move || {
+            crate::writer_tools::validate_direct_operations(&request.operations)?;
             store.apply(
                 &request.path,
                 &request.expected_revision,
@@ -567,7 +554,34 @@ impl XgwxServer {
     }
 
     #[tool(
-        description = "Export revision-scoped text. section modules/variables/networks provides property documents with edit/readonly fields; section program requires program_index and exports an XGK/IEC ladder, SFC or standalone ST/IL program. Includes contacts, coils, native rung/output comments, symbol descriptions, catalog XGK instructions, bound IEC function operands and captured arithmetic/comparison names, native coordinates, physical wires and read-only derived circuit connections. Use an exact unified diff with apply_patch. Positions and identities are scoped to this revision.",
+        description = "Generate native digital I/O variables as one verified transaction. Optional base and slot filters select rows after full-project address allocation; omitted filters select all. A slot alone selects it on every base. Preserves unrelated symbols and program payloads. Native CPU, allocation, layout and duplicate/overlap guards apply. Returns selected row names/addresses/actions and existing duplicate names. Use the inspected current revision; dry_run previews without writing, saving creates a backup. Re-export variables after generation.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn generate_io_variables(
+        &self,
+        Parameters(request): Parameters<GenerateIoRequest>,
+    ) -> CallToolResult {
+        let store = self.store.clone();
+        blocking(move || {
+            let (_,revision,doc) = store.read(&request.path)?;
+            if revision != request.expected_revision { return Err(StoreError::new("stale_revision","File changed; inspect again before generating I/O variables")); }
+            let rows = doc.variable().preview_io_variables_for(request.base,request.slot)
+                .map_err(|e|StoreError::new("operation_failed",e))?;
+            let plan = rows.iter().map(|r|json!({"base":r.base,"slot":r.slot,"model":r.model,"name":r.name,"address":r.address,"data_type":r.data_type,"description":r.description,"source_ref":r.source_ref,"action":r.action,"existing_names":r.existing_names})).collect::<Vec<_>>();
+            let mut result = store.apply(&request.path,&request.expected_revision,&[EditOperation { name:"generate_io_variables".into(),args:json!({"base":request.base,"slot":request.slot}) }],request.dry_run)?;
+            result["scope"] = json!({"base":request.base,"slot":request.slot});
+            result["io_generation"] = json!({"total":plan.len(),"rows":plan});
+            Ok(result)
+        }).await
+    }
+
+    #[tool(
+        description = "Export revision-scoped text. section project/programs/modules/variables/networks provides property documents with edit/readonly fields; section program requires program_index and exports an XGK/IEC ladder, SFC or standalone ST/IL program. Includes contacts, coils, native rung/output comments, symbol descriptions, catalog XGK instructions, bound IEC function operands and captured arithmetic/comparison names, native coordinates, physical wires and read-only derived circuit connections. Use an exact unified diff with apply_patch. Positions and identities are scoped to this revision.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -581,29 +595,29 @@ impl XgwxServer {
             let (path, revision, doc) = store.read(&request.path)?;
             if request.section != "program" {
                 let ir=crate::property_ir::Projection::export(&doc,&revision,&request.section,request.program_index)?;
-                return Ok(json!({"path":path,"revision":revision,"section":request.section,"program_index":request.program_index,"format":"xgwx-properties/1","text":ir.text,"capabilities":["marked_property_updates"],"limitations":"Only properties marked edit can change. Retain object/field identities, order, scalar types and readonly lines. Missing values and structural creation/deletion/replacement are read-only; use apply_edits for those. IEC local rename/type/address changes must be the sole mutation and require renewed export. Editable local addresses use quoted strings; an empty string clears the mapping. Storage and allocation fields are derived and readonly. Native acceptance remains separate."}));
+                return Ok(json!({"path":path,"revision":revision,"section":request.section,"program_index":request.program_index,"format":"xgwx-properties/1","text":ir.text,"capabilities":if request.section == "programs" && request.program_index.is_none() {json!(["marked_property_updates","program_creation_deletion_single_move"])} else if request.section == "variables" {json!(["marked_property_updates","iec_local_declaration_creation_deletion"])} else {json!(["marked_property_updates"])},"limitations":"Only properties marked edit can change. Project name and existing program name/task/version/kind/instance_name/comment are editable; project attributes, program identity/security/allocation flags and missing metadata are readonly. Retain field identities, scalar types and readonly lines. The full programs export permits one append, whole-block deletion or single-block move per patch. Creation uses a fresh @new- identity with edit name and edit language only; native GUIDs are generated internally. Retained blocks must be unchanged during lifecycle edits. Selected-program exports are metadata-only. Re-export after each lifecycle change. Variables exports allow one primitive IEC local creation/deletion per patch; create a variable @new-name program N block with edit name/data_type/description and an exported writable local table. Retained variable blocks must be unchanged. Global creation/deletion is unsupported; I/O generation uses its separate tool. Other property object identities and order remain fixed. Module ID and subtype are omitted. Model edits retain native catalog/CPU/placement guards and must be the sole mutation; re-export afterward because options and matching network configuration use the new model defaults. native_name is readonly. Raw Details is omitted; use supported decoded options. Missing property values and other structural creation/deletion/replacement are read-only; use exposed gap writers for those. IEC local rename/type/address changes must be the sole mutation and require renewed export. Editable local addresses use quoted strings; an empty string clears the mapping. Storage and allocation fields are derived and readonly. Native acceptance remains separate."}));
             }
             let program_index=request.program_index.ok_or_else(||StoreError::new("invalid_arguments","program_index is required for section program"))?;
             let ir = crate::text_ir::Projection::export(&doc, &revision, program_index)?;
             let mut capabilities = vec!["contact_kind_and_operand", "coil_kind_and_operand",
                 "comment_text", "global_and_local_symbol_descriptions"];
             if ir.dialect == "XGK" {
-                capabilities.extend(["xgk_element_creation_deletion", "xgk_comment_creation", "xgk_rung_comment_deletion", "physical_wire_deletion", "vertical_branch_creation", "xgk_instruction_creation_deletion", "xgk_instruction_mnemonic_and_operands"]);
+                capabilities.extend(["xgk_blank_row_insertion", "xgk_element_creation_deletion", "xgk_comment_creation", "xgk_rung_comment_deletion", "physical_wire_deletion", "vertical_branch_creation", "xgk_instruction_creation_deletion", "xgk_instruction_mnemonic_and_operands"]);
             }
-            if ir.dialect == "IEC" { capabilities.extend(["iec_empty_row_element_creation", "iec_terminal_coil_creation", "iec_isolated_element_deletion", "iec_connected_contact_and_terminal_coil_deletion", "physical_wire_deletion", "vertical_wire_creation", "iec_function_operand_edit", "iec_arithmetic_and_comparison_name_edit"]); }
-            if ir.dialect == "SFC" { capabilities = vec!["sfc_existing_row_fields", "sfc_linear_row_creation_deletion_reordering", "sfc_direct_entity_comment_and_condition", "sfc_declaration_descriptions"]; }
+            if ir.dialect == "IEC" { capabilities.extend(["iec_contact_insertion_at_decoded_sites", "iec_parallel_contact_creation", "iec_horizontal_wire_gap_repair", "iec_comment_row_creation", "iec_blank_row_creation_deletion", "iec_simple_rung_creation_deletion", "iec_empty_row_element_creation", "iec_terminal_coil_creation", "iec_isolated_element_deletion", "iec_connected_contact_and_terminal_coil_deletion", "physical_wire_deletion", "vertical_wire_creation", "iec_function_operand_edit", "iec_function_output_clear", "iec_arithmetic_and_comparison_name_edit"]); }
+            if ir.dialect == "SFC" { capabilities = vec!["sfc_existing_row_fields", "sfc_linear_row_creation_deletion_reordering", "sfc_supported_sequence_replacement", "sfc_direct_entity_comment_and_condition", "sfc_declaration_descriptions", "sfc_declaration_creation_update_removal"]; }
             if ir.dialect == "ST" || ir.dialect == "IL" { capabilities = vec!["standalone_source_replacement"]; }
             let text_limitations = "Only quoted source statements inside the source block can change. Their concatenation is the exact native source, including line endings. Use edit_text_variable for declarations. Source is limited to 65536 UTF-16 units without NUL; unsupported encryption/layout/metadata remains read-only. Local decoding is not syntax/type checking; use XG5000 Check Program and Save As for native acceptance.";
-            let sfc_limitations = "SFC row changes use one complete chart snapshot and must be the only writer operation. Linear chart rows can be created, deleted and reordered; new rows require @new- identities and position none/branch_end none. Retained row kind and coordinates, positioned branch order/structure, chart/entity identities and declaration name/type/advanced metadata are read-only. Unsupported charts expose only guarded step-comment/direct %MX transition fields. Native entity, qualifier, TIME, ST-source and declaration constraints remain authoritative. Re-export after chart replacement; native XG5000 acceptance remains separate.";
+            let sfc_limitations = "SFC row changes use one complete chart snapshot and must be the only writer operation. Supported linear and balanced positioned branch rows can be created, deleted, reordered or changed; new rows require @new- identities. Positions and branch endpoints retain native layout checks. Chart/entity identities remain read-only. Declaration type, decoded bounds/initializer/Retain and description can change; add/remove one declaration as the sole mutation. Retained names, system declarations, mapped and unsupported declarations remain guarded. Unsupported charts expose only guarded step-comment/direct %MX transition fields. Native entity, qualifier, TIME, ST-source and declaration constraints remain authoritative. Re-export after chart replacement; native XG5000 acceptance remains separate.";
             Ok(json!({"path":path,"revision":revision,"program_index":program_index,
                 "format":"xgwx-ir/1","dialect":ir.dialect,"text":ir.text,
                 "capabilities":capabilities,
-                "limitations":if ir.dialect == "ST" || ir.dialect == "IL" {text_limitations} else if ir.dialect == "SFC" {sfc_limitations} else {"Existing positions, derived connections, unknown instruction records, function signatures/pin bindings and opaque records are read-only. IEC function names can change only within captured arithmetic/comparison families; bound operand values retain native type/writability checks and cannot be empty. Physical wires can be deleted and supported vertical wires created with fresh @new- identities. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation in a patch; re-export afterward. Existing writer preconditions still apply. Native XG5000 acceptance remains separate."}}))
+                "limitations":if ir.dialect == "ST" || ir.dialect == "IL" {text_limitations} else if ir.dialect == "SFC" {sfc_limitations} else {"Existing positions, derived connections, unknown instruction records, function signatures/pin bindings and opaque records are read-only. IEC function names can change only within captured arithmetic/comparison families; bound operand values retain native type/writability checks. Clearing an output value is a sole structural mutation; inputs cannot be empty. Physical wires can be deleted and supported vertical wires created with fresh @new- identities. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation in a patch; re-export afterward. IEC contact_insert/parallel_contact/wire_restore statements bind to captured readonly sites. comment_row creation requires a native comment template and destination guards. Site edits, blank-row insertion and captured simple IEC rung creation/deletion use one lifecycle statement mutation with the remaining IR unchanged; remove exported writable markers for deletion. Re-export after native row shifts. General XGK rung deletion and unsupported IEC rung shapes remain outside this coverage. Existing writer preconditions still apply. Native XG5000 acceptance remains separate."}}))
         }).await
     }
 
     #[tool(
-        description = "Apply an exact unified diff to text from get_ir using the same section/program_index. Property documents support module comments/options, global variable metadata, guarded IEC local names/types/addresses/descriptions, network names/module metadata and Cnet/FEnet settings. Structural property objects and readonly fields cannot change. IEC local rename/type/address changes require one mutation. Compile supported semantic changes into guarded writers and save as one verified transaction with a backup. Supports standalone ST/IL source replacement with exact identity/language/source guards, SFC linear row creation/deletion/reordering and existing row fields, guarded direct entity comments/conditions and declaration descriptions, plus XGK cell and catalog instruction/comparison creation/deletion, instruction mnemonic/operand edits, IEC empty-row element creation, terminal-coil creation, isolated/connected-contact and terminal-coil deletion, physical-wire deletion and vertical-wire creation, contact/coil kind/operand edits, bound IEC function operands and captured arithmetic/comparison names, existing comment text, symbol descriptions, and XGK comment creation/rung comment deletion. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation; re-export afterward. SFC row changes target one chart and must be the only writer operation. Rejects unsupported moves and derived topology edits. Empty patch is a no-op. dry_run performs no disk changes.",
+        description = "Apply an exact unified diff to text from get_ir using the same section/program_index. Property documents support project names, program name/task/version/kind/instance_name/comment, module catalog models/comments/decoded options, global variable metadata, guarded IEC local names/types/addresses/descriptions, network names/module metadata and Cnet/FEnet settings. The complete programs export supports one append, whole-block deletion or single-block move per patch with native identity/layout guards; selected-program exports are metadata-only. Variables exports allow one primitive IEC local declaration creation/deletion per patch, with native table/type/reference guards; global creation/deletion remains unsupported. Other structural property objects and readonly fields cannot change. Module model replacement and IEC local rename/type/address changes require one mutation. Compile supported semantic changes into guarded writers and save as one verified transaction with a backup. Supports standalone ST/IL source replacement with exact identity/language/source guards, SFC supported linear/positioned branch row creation/deletion/reordering and row fields, guarded direct entity comments/conditions and declaration creation/update/removal, plus IEC leading/wire/short-wire contact insertion at captured sites, parallel-contact and comment-row creation, horizontal-wire gap repair, IEC blank-row and captured simple rung creation/deletion, XGK blank-row insertion, XGK cell and catalog instruction/comparison creation/deletion, instruction mnemonic/operand edits, IEC empty-row element creation, terminal-coil creation, isolated/connected-contact and terminal-coil deletion, physical-wire deletion and vertical-wire creation, contact/coil kind/operand edits, bound IEC function operands and captured arithmetic/comparison names, existing comment text, symbol descriptions, and XGK comment creation/rung comment deletion. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation; re-export afterward. SFC row changes target one chart and must be the only writer operation. Rejects unsupported moves and derived topology edits. Empty patch is a no-op. dry_run performs no disk changes.",
         annotations(
             read_only_hint = false,
             destructive_hint = true,
@@ -661,5 +675,5 @@ impl XgwxServer {
     }
 }
 
-#[tool_handler(router = self.tool_router, name = "xgwx-mcp", version = "0.1.0", instructions = "Inspect the file and use the current revision for edits. Use search_project to locate decoded objects by name/address/description/operand/mnemonic/comment, then inspect edit sites before editing. rename_program accepts object_ref. Use get_ir/apply_patch for module comments and contact operands. Use prepare_change for readable before/after and commit_change with its token to save the reviewed candidate. Use focused list_modules/list_variables/list_networks discovery and list_module_catalog for available hardware. Export get_ir section modules/variables/networks for marked property edits, or section program with program_index for positional ladder/SFC text. Send an exact unified diff to apply_patch with the same section and selection. For direct operations, discover schemas with list_operations/describe_operation. Edits save immediately with backups. Re-inspect after structural edits. Local validation does not certify XG5000 or PLC acceptance.")]
+#[tool_handler(router = self.tool_router, name = "xgwx-mcp", version = "0.1.0", instructions = "Inspect the file and use the current revision for edits. Use search_project to locate decoded objects by name/address/description/operand/mnemonic/comment, then inspect edit sites before editing. Use get_ir/apply_patch for module comments and contact operands. Use prepare_change for readable before/after and commit_change with its token to save the reviewed candidate. Use focused list_modules/list_variables/list_networks discovery and list_module_catalog for available hardware. Export get_ir section project/programs/modules/variables/networks for marked property edits, or section program with program_index for positional ladder/SFC text. Send an exact unified diff to apply_patch with the same section and selection. Default to get_ir/apply_patch for supported text and property edits. Only capabilities outside IR coverage have an independently exposed xgwx_<operation_name> tool with its complete input schema. list_operations/describe_operation provide supplementary documentation. apply_edits batches only exposed gap writers atomically and rejects patch-covered operations. Edits save immediately with backups. Re-inspect after structural edits. Local validation does not certify XG5000 or PLC acceptance.")]
 impl ServerHandler for XgwxServer {}

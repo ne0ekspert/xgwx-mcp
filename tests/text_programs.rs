@@ -210,7 +210,16 @@ async fn stdio_st_and_il_creation_inspection_declarations_and_patch() {
         CallToolRequestParams::new(name.to_owned())
             .with_arguments(args.as_object().unwrap().clone())
     };
-    assert_eq!(client.list_all_tools().await.unwrap().len(), 17);
+    assert_eq!(
+        client.list_all_tools().await.unwrap().len(),
+        16 + xgwx_mcp::operations::OPERATIONS
+            .iter()
+            .filter(|operation| {
+                xgwx_mcp::operations::describe_operation(operation.name).unwrap()["tool_name"]
+                    .is_string()
+            })
+            .count()
+    );
     for name in ["edit_text_program", "edit_text_variable"] {
         let result = client
             .call_tool(call("describe_operation", json!({"name":name})))
@@ -254,8 +263,36 @@ async fn stdio_st_and_il_creation_inspection_declarations_and_patch() {
         } else {
             "LD TRUE\r\nST Run\r\nRET\r\n"
         };
-        let source = json!({"name":"edit_text_program","args":{"patch":{"program_index":0,"expected_object_id":text["object_id"],"expected_language":language,"expected_source":"","source":source}}});
-        let result = client.call_tool(call("apply_edits",json!({"path":path,"expected_revision":created["revision_after"],"operations":[vars,source]}))).await.unwrap();
+        let declaration = client.call_tool(call("xgwx_edit_text_variable", json!({"path":path,"expected_revision":created["revision_after"],"args":vars["args"]}))).await.unwrap();
+        assert_ne!(declaration.is_error, Some(true));
+        let source_ir = client
+            .call_tool(call("get_ir", json!({"path":path,"program_index":0})))
+            .await
+            .unwrap()
+            .structured_content
+            .unwrap();
+        let text = source_ir["text"].as_str().unwrap();
+        assert!(text.contains("source {\n}\n"));
+        let edited = text.replace(
+            "source {\n}\n",
+            &format!(
+                "source {{\n  source {}\n}}\n",
+                serde_json::to_string(source).unwrap()
+            ),
+        );
+        let source_patch = format!(
+            "@@ -1,{} +1,{} @@\n{}{}",
+            text.lines().count(),
+            edited.lines().count(),
+            text.lines()
+                .map(|line| format!("-{line}\n"))
+                .collect::<String>(),
+            edited
+                .lines()
+                .map(|line| format!("+{line}\n"))
+                .collect::<String>()
+        );
+        let result = client.call_tool(call("apply_patch", json!({"path":path,"program_index":0,"expected_revision":source_ir["revision"],"patch":source_patch}))).await.unwrap();
         assert_ne!(result.is_error, Some(true));
         let saved = result.structured_content.unwrap();
         let ir = client

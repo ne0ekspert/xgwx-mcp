@@ -4,10 +4,11 @@ Local Rust stdio MCP server for inspecting and editing LS XG5000 `.xgwx` files t
 
 ## Build and run
 
-Build with Rust 1.88 or newer. Cargo fetches [libxgwx](https://crates.io/crates/libxgwx)
-version `0.1.0` with its `write` and `il` features enabled; `Cargo.lock` records the resolved release.
-No sibling checkout or dependency patch is required. The historical bundled
-rename-project patch is retained for older library baselines only.
+Build with Rust 1.88 or newer. The `libxgwx` dependency uses its published `0.1.0`
+baseline with `write` and `il`, plus a package-relative patch in `vendor/libxgwx`
+for scoped I/O generation and first insertion into captured empty IEC local tables.
+`Cargo.lock` records this override. No sibling checkout is required. The native
+patch is documented in [PATCHES.md](vendor/libxgwx/PATCHES.md).
 
 For local library development, add this override to `.cargo/config.toml`:
 
@@ -70,8 +71,28 @@ Configure a stdio MCP client using the binary's absolute path and arguments. An 
 
 ## Tools
 
+Use `get_ir` → `apply_patch` as the default editing workflow. Export the
+current revision-scoped program or property document, change only supported
+editable statements, and submit an exact unified diff. The server derives writer
+arguments and expected values internally and retains its native guards, backup
+and atomic-save behavior.
+
+Only capabilities outside IR coverage have direct `xgwx_<operation_name>` tools.
+Their complete input schemas are included in `tools/list`. Catalog responses
+include `editing_route` and `tool_name`: a null tool name means the writer is
+internal to patches; partial coverage retains a direct tool for the remaining
+capabilities. Library writer names in reference examples identify internal APIs,
+not necessarily callable MCP tools.
+
+`apply_edits` and initial `create_file.operations` accept only the closed union
+of these exposed gap writers. Patch-covered operations return `patch_required`
+before any file changes. Create a project first, then export and patch it to
+populate its supported program/property content.
+
+
 | Tool | Purpose |
 | --- | --- |
+| `xgwx_<operation_name>` | Execute one remaining direct gap writer with `path`, `expected_revision`, its exact typed `args`, and optional `dry_run`. |
 | `list_templates` | Discover native blank projects and supported CPU/language creation choices without an existing file. |
 | `create_file` | Generate a verified new project through libxgwx with optional initial edits; never overwrite an existing destination. |
 | `list_modules` | List installed modules, settings and rack context. |
@@ -82,10 +103,10 @@ Configure a stdio MCP client using the binary's absolute path and arguments. An 
 | `search_project` | Find decoded programs, variables, contacts, coils, instructions and comments inside a known project, with revision-scoped locations and linked symbol descriptions. |
 | `list_operations` | Find supported writer operations by query or subsystem. |
 | `describe_operation` | Obtain an operation's exact argument schema, constraints, inspection requirements, and example. |
-| `rename_program` | Rename one program using its revision-bound object reference. |
 | `prepare_change` | Preview a batch of common edits with before/after values and an exact candidate token. |
 | `commit_change` | Save the prepared candidate if the source and candidate still match. |
 | `apply_edits` | Apply ordered operations using the inspected revision; optionally dry-run the same transaction without writing files. |
+| `generate_io_variables` | Generate native I/O variables with optional base/slot scope and a selected-row preview. |
 | `get_ir` | Export deterministic positional XGK/IEC ladder or SFC text with native comments, symbol descriptions, physical wires and read-only derived connections. |
 | `apply_patch` | Lower an exact unified diff into guarded writer operations and save one verified transaction. |
 | `validate_file` | Report container verification and available program diagnostics separately. |
@@ -137,17 +158,13 @@ revision, object kind and observed identity/value. It is a locator, not permissi
 or a guarantee of writability. References survive server restarts while the same
 file remains unchanged; preview tokens are limited to the current server session.
 
-- `rename_program(path, object_ref, name, dry_run?)`: use a program reference from
-  `search_project` or `inspect_file` overview/programs/program metadata.
+For project names, export `get_ir(section:"project")`. For program metadata,
+export `get_ir(section:"programs", program_index:...)`, or omit the index for
+all programs. Patch the marked fields through `apply_patch`.
 
 For module comments, export `get_ir(section:"modules")` and edit the comment
 through `apply_patch`. For contact operands, export the target program with
 `get_ir(section:"program", program_index:...)` and patch the operand.
-
-`rename_program` derives revision/identity/expected-value arguments, then calls
-the same public writers and verified atomic-save pipeline as `apply_edits`. It saves
-immediately unless `dry_run:true`. Its response includes human-readable `changes`
-with target, field, before and after values, plus the usual validation/backup data.
 
 To review a batch once and commit the exact candidate:
 
@@ -183,21 +200,29 @@ separate from local verification. See the portable
 
 ## Property text patches
 
-Use the focused listing tools, then `get_ir` with `section:"modules"`,
-`"variables"` or `"networks"`. The complete property document marks each field
+Use the focused listing tools, then `get_ir` with `section:"project"`, `"programs"`,
+`"modules"`, `"variables"` or `"networks"`. The complete property document marks each field
 `edit` or `readonly`. Send an exact unified diff through `apply_patch` with the
 same section and exported revision. Existing program exports use the default
 `section:"program"` with a required `program_index`.
 
-Property patches cover module comments/options, global variable metadata,
+Property patches cover project names, program name/task/version/kind/instance_name/comment, module catalog models/comments/decoded options, global variable metadata,
 guarded IEC local name/type/address/description changes, network names/module metadata,
 and exported Cnet/FEnet settings. Model replacement and structural object edits
-remain direct `apply_edits` operations. Read the portable
+remain exposed direct gap tools. Read the portable
 [property patch guide](skills/xgwx-edit/references/property-patches.md).
+
+Network property patches cover network names, linked module configuration
+names/aliases/descriptions and all existing settings supported by the FEnet
+field writer: both IPv4 configurations, DHCP flags and five numeric settings.
+The `edit_browser_network` and `edit_fenet_field` wrappers are internal only;
+use `get_ir(section:"networks")` → `apply_patch`. Missing fields, identities and
+opaque protocol records remain readonly. Native subnet/range/driver validators,
+revision guards and atomic rollback are preserved.
 
 ## Positional ladder language
 
-Export one program with `get_ir`, then send an exact unified diff to `apply_patch` using its revision. Text IR v1 supports SFC linear row creation/deletion/reordering and existing row fields, guarded direct entity comments/conditions and declaration descriptions, plus XGK element and catalog instruction/comparison creation/deletion and instruction mnemonic/operand edits, IEC empty-row element and terminal-coil creation, IEC isolated/connected-contact and terminal-coil deletion, physical-wire deletion and supported vertical-wire creation, XGK/IEC contact and coil kind/operand changes, bound IEC function operand edits and captured arithmetic/comparison name changes, existing native comments, global/local symbol descriptions, and XGK comment creation/rung-comment deletion. It preserves explicit native positions and read-only derived connections, unknown instructions, and opaque records. The [language reference](skills/xgwx-edit/references/text-ir.md) defines the syntax and writer boundaries. Existing positions and derived connections remain immutable. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation in a patch; re-export before dependent edits. Broader supported writers remain available through `apply_edits`.
+Export one program with `get_ir`, then send an exact unified diff to `apply_patch` using its revision. Text IR v1 supports SFC supported linear/positioned branch sequence replacement and row fields, guarded direct entity comments/conditions and decoded declaration creation/update/removal, plus XGK element and catalog instruction/comparison creation/deletion and instruction mnemonic/operand edits, IEC empty-row element and terminal-coil creation, IEC isolated/connected-contact and terminal-coil deletion, physical-wire deletion and supported vertical-wire creation, XGK/IEC contact and coil kind/operand changes, bound IEC function operand edits and captured arithmetic/comparison name changes, existing native comments, global/local symbol descriptions, and XGK comment creation/rung-comment deletion. It preserves explicit native positions and read-only derived connections, unknown instructions, and opaque records. The [language reference](skills/xgwx-edit/references/text-ir.md) defines the syntax and writer boundaries. Existing ladder positions and derived connections remain immutable. SFC row positions and branch endpoints retain native balanced-layout checks. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation in a patch; re-export before dependent edits. Capabilities outside IR coverage retain independently exposed direct tools; `apply_edits` batches only those gap writers.
 
 ## Verified operation examples
 
@@ -254,7 +279,7 @@ is a regular file, then acquires its exclusive advisory lock through `fs2`.
 
 `list_templates` returns supported `creation_choices` with CPU models and program
 languages. Choose `project_name`, `path`, `cpu_model` and `program_language`;
-optionally choose `program_name` and ordered initial `operations`:
+optionally choose `program_name` and initial gap-writer `operations`:
 
 ```json
 {"project_name":"Factory Line 1","path":"factory.xgwx","cpu_model":"XGI-CPUE","program_language":"SFC","program_name":"Main","dry_run":true}
@@ -275,7 +300,7 @@ and [template provenance](templates/README.md).
 ## Standalone ST and IEC IL
 
 Create ST/IL projects with `create_file(program_language:"ST"|"IL")`, or add
-programs through `create_program`. Discover supported CPU/language choices with
+programs through the complete `programs` property export. Discover supported CPU/language choices with
 `list_templates`. Inspect `section:"text"` (optionally selecting `program_index`)
 or `section:"text.variables"` for source, ObjectId, editability and declarations.
 `edit_text_program` replaces source with identity, language and expected-source
@@ -292,3 +317,23 @@ XGK IL uses `edit_vendor_il` and `inspect_file(section:"vendor_il")`; it rebuild
 ## License
 
 Licensed under GNU GPL version 3 (`GPL-3.0-only`). See [LICENSE](LICENSE) for the full terms.
+
+Program lifecycle also uses `get_ir(section:"programs")`, without an index.
+Append one fresh `program_metadata @new-...` block with quoted `edit name` and
+`edit language` fields, delete one whole block, or move one whole block to reorder.
+Keep retained blocks and readonly context unchanged; each lifecycle patch is a
+sole mutation and requires re-export afterward. Native identities are generated
+internally and existing writer guards apply. See the [lifecycle reference](skills/xgwx-edit/references/property-patches.md#program-lifecycle-in-the-full-list).
+
+Variable lifecycle uses `get_ir(section:"variables", program_index:...)` →
+`apply_patch` for one primitive IEC local declaration creation/deletion per patch.
+Writable local tables are explicit. Global variable creation/deletion remains
+unsupported; SFC/ST/IL declarations use their existing domain workflows.
+I/O generation is separate: `generate_io_variables(path, expected_revision,
+base?, slot?, dry_run?)`. Omitted filters select all; slot alone matches that slot
+on every base. Full-project allocation/validation runs before filtering, so
+addresses retain their native positions. Preview returns selected rows/actions.
+
+Blank-row and rung lifecycle uses program IR: add `blank_row @new-space after row N` (IEC) or `before y N` (XGK), or `rung_row @new-name at row N contact NO "operand" coil OUT "operand"` (IEC). Remove exported writable row markers for supported IEC deletion. Apply one lifecycle mutation with the remaining body unchanged, then re-export. See the text IR reference for native limits.
+
+IEC program IR also exposes captured `contact_site`, `parallel_site`, and `wire_gap` metadata. Add one `contact_insert`, `parallel_contact`, or `wire_restore` statement referencing a current site; `comment_row` creates a native comment from an existing captured template. Retain the rest of the IR and re-export after saving. See the text IR reference for syntax and bounds.

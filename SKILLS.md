@@ -53,7 +53,7 @@ Call `list_templates` without a file path to discover native `xgk_ld`, `xgi_ld`
 Repeat with `dry_run:false` to create the verified file. The parent must exist
 inside an allowed root, and the destination must be absent; creation never
 overwrites files, directories or symlinks. Optional ordered `operations` can
-rename program 0 or populate its blank ladder through the existing writers.
+rename program 0 or populate its blank ladder through exposed gap writers; use get_ir/apply_patch after creation for patch-covered content.
 Choose project_name and optional program_name directly; CPU/language selects the blank automatically. Only advertised LD/SFC/ST/IL combinations are supported. Omitted names retain native defaults; internal seed identities and PLC defaults are retained.
 Creation returns `revision_after`, validation and results, with no original or
 backup. Inspect the saved file before preparing further edits; subsequent changed
@@ -63,6 +63,25 @@ permissions, dry runs and error handling. `create_program` edits an existing
 project and does not create a filesystem file.
 
 ## Discover and inspect
+
+Use `get_ir` → `apply_patch` as the default editing workflow. Export the
+current revision-scoped program or property document, change only supported
+editable statements, and submit an exact unified diff. The server derives writer
+arguments and expected values internally and retains its native guards, backup
+and atomic-save behavior.
+
+Only capabilities outside IR coverage have direct `xgwx_<operation_name>` tools.
+Their complete input schemas are included in `tools/list`. Catalog responses
+include `editing_route` and `tool_name`: a null tool name means the writer is
+internal to patches; partial coverage retains a direct tool for the remaining
+capabilities. Library writer names in reference examples identify internal APIs,
+not necessarily callable MCP tools.
+
+`apply_edits` and initial `create_file.operations` accept only the closed union
+of these exposed gap writers. Patch-covered operations return `patch_required`
+before any file changes. Create a project first, then export and patch it to
+populate its supported program/property content.
+
 
 Begin by reading the project and its revision:
 
@@ -120,7 +139,7 @@ Choose the export for the requested change:
 
 | Change | `get_ir` selection | Format |
 | --- | --- | --- |
-| Module comments or supported options | `section:"modules"` | `xgwx-properties/1` |
+| Module models, comments or decoded options | `section:"modules"` | `xgwx-properties/1` |
 | Global or IEC local variable metadata and addresses | `section:"variables"`, optional `program_index` for locals | `xgwx-properties/1` |
 | Supported network configuration fields | `section:"networks"` | `xgwx-properties/1` |
 | Ladder elements, instructions, wires or comments; SFC charts; ST/IL source | `section:"program"`, required `program_index` | `xgwx-ir/1` |
@@ -166,7 +185,7 @@ internally and enforces supported areas, type widths and overlap rules; never
 adjust the derived readonly fields yourself. Global metadata changes for one
 variable can share a patch and are combined into one writer operation.
 Module model changes and property object creation/deletion require supported
-`apply_edits` operations rather than property diffs.
+exposed direct gap tools rather than property diffs.
 
 ### Program syntax
 
@@ -210,7 +229,7 @@ Supported element creation uses a fresh `@new-<name>` identity at an allowed
 native position; after saving, re-export to obtain source-backed identities.
 Instruction creation/deletion/arity changes, connected IEC deletion and wire
 changes must be the sole mutation. SFC row changes also require a sole chart
-operation; preserve retained positions and branch structure. Consult the
+operation; use native validated positions and balanced branch structure. Consult the
 [text IR reference](skills/xgwx-edit/references/text-ir.md) for the specific
 statement's supported fields and creation/deletion rules before structural edits.
 
@@ -408,7 +427,7 @@ arrays paginate independently. Catalog discovery needs no project file.
 Call `get_ir(path, section:"modules"|"variables"|"networks")`, optionally selecting
 program_index for variables. Change only marked `edit` values; preserve readonly
 fields, object identities and ordering. Apply an exact unified diff with the
-same section/selection and expected_revision. Module comments/options, global
+same section/selection and expected_revision. Module catalog models/comments/decoded options, global
 metadata, IEC local names/types/addresses/descriptions, network metadata and exported
 Cnet/FEnet settings lower through guarded public writers. Local rename/type/address
 changes require a sole mutation and renewed export. Read
@@ -416,7 +435,7 @@ changes require a sole mutation and renewed export. Read
 
 ## Patch positional ladder text
 
-Use `get_ir` with `path` and `program_index` to export a program as `xgwx-ir/1` text. Send an exact unified diff through `apply_patch`, with the same path/program index, exported `expected_revision`, and optional `dry_run`. This supports SFC linear row creation/deletion/reordering and existing row fields, guarded direct entity comments/conditions and declaration descriptions, plus XGK contact/coil and catalog instruction/comparison creation/deletion and instruction mnemonic/operand edits, IEC empty-row/terminal-coil creation and isolated/connected-contact and terminal-coil deletion, physical-wire deletion and supported vertical-wire creation, XGK/IEC contact and coil changes, bound IEC function operand edits and captured arithmetic/comparison name changes, native comment text, symbol descriptions, and XGK comment creation/rung-comment deletion. Native positions and connectivity remain explicit; unsupported moves and derived connection changes are rejected. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation in a patch; commit and re-export before dependent edits. Read the portable [text IR reference](skills/xgwx-edit/references/text-ir.md) for syntax, comment semantics and examples.
+Use `get_ir` with `path` and `program_index` to export a program as `xgwx-ir/1` text. Send an exact unified diff through `apply_patch`, with the same path/program index, exported `expected_revision`, and optional `dry_run`. This supports SFC supported linear/positioned branch sequence replacement and row fields, guarded direct entity comments/conditions and declaration creation/update/removal, plus XGK contact/coil and catalog instruction/comparison creation/deletion and instruction mnemonic/operand edits, IEC empty-row/terminal-coil creation and isolated/connected-contact and terminal-coil deletion, physical-wire deletion and supported vertical-wire creation, XGK/IEC contact and coil changes, bound IEC function operand edits and captured arithmetic/comparison name changes, native comment text, symbol descriptions, and XGK comment creation/rung-comment deletion. Native positions and connectivity remain explicit; unsupported moves and derived connection changes are rejected. Instruction creation/deletion/arity changes, connected IEC deletion and wire changes must be the sole mutation in a patch; commit and re-export before dependent edits. Read the portable [text IR reference](skills/xgwx-edit/references/text-ir.md) for syntax, comment semantics and examples.
 
 Patch edits use the same immediate-save, backup and verified transaction behavior as `apply_edits`. The server derives current source offsets and expected values under its locks. Re-export after saves rather than guessing identities or reusing offsets.
 
@@ -424,10 +443,8 @@ Patch edits use the same immediate-save, backup and verified transaction behavio
 
 Programs from `inspect_file` and `search_project`, physical modules from
 `list_modules`/hardware inspection, and supported contacts from `search_project`
-include `object_ref`. Use program references with
-`rename_program(path, object_ref, name)`. Add `dry_run:true` to preview;
-otherwise it saves immediately with the normal backup/verification.
-Its `changes` list explains target, field and before/after values.
+include `object_ref`. For project naming and program metadata, export the
+`project` or `programs` property section and patch its editable fields.
 For module comments and contact operands, export the modules or target program
 with `get_ir`, then submit the change through `apply_patch`.
 
@@ -440,25 +457,54 @@ exact candidate. Tokens are single-use after success, session-scoped, expire in
 reinspect and rebuild after stale failures. Known errors return `recovery`, and
 writer failures include `operation_name` for exact schema discovery.
 
+
+## Network metadata and FEnet settings
+
+Use `get_ir(section:"networks")` → `apply_patch` for these existing decoded
+fields. `edit_browser_network` and `edit_fenet_field` are internal writer routes;
+they have no separate direct tools and cannot be selected in batch or creation
+operation arrays.
+
+| Object | Editable fields |
+| --- | --- |
+| Network | `name` |
+| Linked network module | `config_name`, `alias`, `description` |
+| FEnet IPv4 settings | `ipAddress`, `subnet`, `gateway`, `dns`, and their `2` variants |
+| FEnet DHCP | `dhcp`, `dhcp2` |
+| FEnet numeric settings | `stationNo`, `glofaSocketCount`, `rcvWaitTime`, `clientWaitTime`, `driverType` |
+
+Keep quoted scalar values as exported: IPv4 uses four decimal octets, DHCP uses
+`"0"`/`"1"`, and numeric settings use quoted decimal integers. The native writer
+checks contiguous subnet masks, DHCP flags, numeric ranges and driver choices.
+Driver values are `"2"` (XGT), `"5"` (Modbus) and `"7"` (Smart). Socket count is
+1–16; receive/client wait times are 2–255. Station-number limits depend on the
+stored protocol configuration and remain enforced by the native writer.
+
+`config_name` selects the PLC configuration scope; use an inspected configuration
+name rather than a display label. Changing it can detach the settings association.
+FEnet records with missing or ambiguous membership/configuration associations
+show readonly `association_status` and readonly settings; their decoded values
+remain visible, but patches cannot promote them to editable fields.
+
+Missing settings stay `readonly ... = none`: patches cannot invent attributes.
+Network/module identity and protocol fields remain readonly. Preserve the
+exported object boundaries, order and revision; repeated field names belong to
+different objects. Only the selected existing XML settings change; opaque
+protocol data, hardware and program payloads are retained. Any failed setting
+aborts the entire transaction, including other metadata edits in that patch.
+
 ## Save an inspected change
 
-For a module uniquely inspected at base 0, slot 2, an example `apply_edits` request is:
+For a module name, comment or decoded option, export `get_ir(section:"modules")`, locate the target
+module by its inspected base/slot and modify its `edit model`, `edit comment`
+or `edit option.<key>.<index>` value. ID/subtype and raw Details are omitted;
+`native_name` is readonly. Model replacement retains native catalog/CPU/placement
+guards and must be the sole mutation; re-export before editing new options. Submit
+that exact diff to `apply_patch` with the export's revision and `dry_run:true`.
+Use the complete [property patch workflow](skills/xgwx-edit/references/property-patches.md)
+for syntax and a request example.
 
-```json
-{
-  "path": "/path/to/projects/machine.xgwx",
-  "expected_revision": "<revision from inspect_file>",
-  "operations": [
-    {
-      "name": "update_module",
-      "args": {"base":0,"slot":2,"patch":{"comment":"Feed conveyor"}}
-    }
-  ],
-  "dry_run": true
-}
-```
-
-Replace the example path, position, text, and revision with inspected values. Dry-run returns candidate validation and a candidate `revision_after` without changing the source or creating a backup. To save the reviewed candidate, repeat the same request with `dry_run:false`, retaining the original inspected `expected_revision`. A successful changed save returns `backup_path` and the new revision. No-op requests create no backup.
+Use the inspected path, exported text and revision. Dry-run returns candidate validation and a candidate `revision_after` without changing the source or creating a backup. To save the reviewed candidate, repeat the same request with `dry_run:false`, retaining the original inspected `expected_revision`. A successful changed save returns `backup_path` and the new revision. No-op requests create no backup.
 
 Operations in a request run in order on one in-memory document. Any failed operation or verification aborts the whole request. Source files are replaced atomically after a verified candidate and unique adjacent backup are ready. File permissions are preserved. Backups use `<filename>.xgwx-mcp-backup-<random suffix>` and remain until explicitly removed. A persistent `<filename>.xgwx-mcp.lock` sidecar coordinates cooperating server processes; coordinate writes with external editors that do not honor it.
 
@@ -496,3 +542,21 @@ language and exact expected-source checks. Declarations require a complete
 expected_variables snapshot. `get_ir`/`apply_patch` supports quoted source lines
 with exact newline preservation. Read the [ST/IL reference](skills/xgwx-edit/references/st-il.md)
 for examples and constraints. `validate_file` reports decoding, not source compilation.
+
+Program IR also covers `update_ladder_cell_text` for decoded semantic cells and catalog instructions; opaque/unclassified string records remain readonly. `update_iec_ld_function_operand` supports nonempty bound values and clearing OUTPUT values with `""` as the sole structural mutation. `replace_sfc_sequence` supports complete native validated linear/positioned branch rows. `edit_sfc_variable` supports decoded type/bounds/initializer/Retain/description edits and one declaration insertion/deletion per patch; retained names/system flags stay immutable. These writers use `get_ir(section:"program", program_index)` → `apply_patch`; they are no longer exposed as direct tools or public operation selectors.
+
+Project/program metadata uses `get_ir(section:"project")` or `get_ir(section:"programs", program_index:...)` → `apply_patch`. Omitting the index exports all program metadata. Project name is editable with the captured-name guard. Existing program name, task, version, kind, instance_name and comment are editable and coalesce into one native update per program. Missing attributes, project version/comment/IDs, program object_id/encryption/allocation flags remain readonly here; lifecycle edits use the complete programs export. Scalar types and source identities remain fixed. Export again after metadata edits; task/kind/version changes still require native XG5000 verification. The old rename_project/update_program writer tools and standalone rename_program tool are removed; prepared previews retain their explicit rename_program change type.
+
+Program lifecycle uses the full `get_ir(section:"programs")` export without `program_index`: append one `program_metadata @new-<name>` block with exactly quoted `edit name` and `edit language`; remove one whole exported block to delete; move one whole block to reorder. Keep retained blocks and readonly context unchanged. Lifecycle edits are sole mutations with native program identity/container/CPU/language guards. Native IDs are generated consistently for preview/save. Re-export after saving before metadata/body edits or another lifecycle change. Selected-program exports remain metadata-only. The create_program/delete_program/move_program direct tools and public batch selectors are removed; see the [property patch guide](skills/xgwx-edit/references/property-patches.md#program-lifecycle-in-the-full-list).
+
+The project and modules property exports show the CPU model and catalog status without redundant CPU type_code/family fields. Task type_code is also omitted from these two contexts; detailed context remains available in other exports.
+
+Module IR omits ID/subtype, exposes supported editable catalog `model`, and keeps `native_name` readonly. Model replacement is a sole mutation through get_ir/apply_patch, using native CPU/catalog/slot guards and resetting model defaults/network records. An editable empty model denotes an unknown current catalog model; unsupported targets remain readonly. The select_module direct tool and public batch selector are removed.
+
+Variable lifecycle: use the variables property export. Append `variable @new-<name> program N` with exactly quoted edit name/data_type/description inside its block, targeting an exported `local_table @pN create true`; remove one complete existing local block to delete. One lifecycle mutation per patch; retained blocks/context stay unchanged and native order is derived. Re-export before assigning addresses or dependent edits. Native type/layout/name/reference guards remain authoritative. Global creation/deletion is unsupported; existing global metadata and SFC/ST/IL declaration workflows remain available.
+
+I/O generation stays separate as `generate_io_variables(path, expected_revision, base?, slot?, dry_run?)`, using top-level arguments. Base alone selects its I/O modules; slot alone selects that slot on every base; omission selects all. Full native allocation and layout validation precede row filtering, so filtered scope cannot renumber addresses or bypass allocation guards. Output includes selected names/addresses/actions/duplicates. dry_run writes nothing; changed saves retain backups. Re-export variables afterward. `insert_iec_local_symbol`/`delete_iec_local_symbol` are patch-only, and the old xgwx_generate_io_variables convenience tool is replaced by this scoped tool.
+
+Blank-row and rung lifecycle uses program IR: add `blank_row @new-space after row N` (IEC) or `before y N` (XGK), or `rung_row @new-name at row N contact NO "operand" coil OUT "operand"` (IEC). Remove exported writable row markers for supported IEC deletion. Apply one lifecycle mutation with the remaining body unchanged, then re-export. See the text IR reference for native limits.
+
+IEC program IR also exposes captured `contact_site`, `parallel_site`, and `wire_gap` metadata. Add one `contact_insert`, `parallel_contact`, or `wire_restore` statement referencing a current site; `comment_row` creates a native comment from an existing captured template. Retain the rest of the IR and re-export after saving. See the text IR reference for syntax and bounds.

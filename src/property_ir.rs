@@ -29,6 +29,8 @@ impl Binding {
 pub struct Projection {
     pub text: String,
     bindings: BTreeMap<usize, Binding>,
+    lifecycle: Option<crate::program_lifecycle_ir::Lifecycle>,
+    variable_lifecycle: Option<crate::variable_lifecycle_ir::Lifecycle>,
 }
 fn invalid(s: impl ToString) -> StoreError {
     StoreError::new("unsupported_ir_edit", s)
@@ -39,6 +41,29 @@ fn literal(v: &Value) -> String {
     } else {
         v.to_string()
     }
+}
+
+// Probe on a clone: model selection retains native CPU, placement and unique-coordinate guards.
+fn module_model_binding(
+    doc: &XgwxDocument,
+    position: Option<(u32, u32)>,
+    model: Option<&str>,
+) -> Option<Binding> {
+    let (base, slot) = position?;
+    let mut candidate = doc.clone();
+    candidate
+        .module_mut()
+        .at(base, slot)
+        .and_then(|mut module| module.select_model(model.unwrap_or("XGI-D24A/B")))
+        .ok()?;
+    Some(
+        Binding::new(
+            "select_module",
+            json!({"base":base,"slot":slot}),
+            &["model"],
+        )
+        .structural(),
+    )
 }
 impl Projection {
     fn line(&mut self, s: impl AsRef<str>) {
@@ -66,24 +91,119 @@ impl Projection {
         if program_index.is_some_and(|i| i >= doc.program().programs().len()) {
             return Err(invalid("program_index is absent"));
         }
-        if section != "variables" && program_index.is_some() {
+        if !matches!(section, "variables" | "programs") && program_index.is_some() {
             return Err(invalid(
-                "program_index applies only to program or variables documents",
+                "program_index applies only to program, programs or variables documents",
             ));
         }
         let mut p = Self {
             text: String::new(),
             bindings: BTreeMap::new(),
+            variable_lifecycle: (section == "variables")
+                .then(crate::variable_lifecycle_ir::Lifecycle::default),
+            lifecycle: (section == "programs").then(|| crate::program_lifecycle_ir::Lifecycle {
+                revision: revision.into(),
+                complete: program_index.is_none(),
+                identities: doc
+                    .program()
+                    .programs()
+                    .into_iter()
+                    .map(|p| p.object_id)
+                    .collect(),
+            }),
         };
         p.line(format!(
             "xgwx-properties 1 revision {} section {section} program {}",
             json!(revision),
             program_index.map(|i| i.to_string()).unwrap_or("all".into())
         ));
-        for line in crate::context_ir::export(doc, None).lines() {
+        for line in crate::context_ir::export_properties(doc, section).lines() {
             p.line(line);
         }
         match section {
+            "project" => {
+                let info = doc.project().info();
+                p.line("project @project {");
+                let binding = info.name.as_ref().and_then(|name| {
+                    let mut candidate = doc.clone();
+                    candidate.project_mut().rename_if(name, name).ok()?;
+                    Some(Binding::new(
+                        "rename_project",
+                        json!({"expected_name":name}),
+                        &["name"],
+                    ))
+                });
+                p.field("name", json!(info.name), binding);
+                for (key, value) in [
+                    ("attribute", json!(info.attribute)),
+                    ("version", json!(info.version)),
+                    ("comment", json!(info.comment)),
+                    ("wks_node_count", json!(info.wks_node_count)),
+                    ("guid", json!(info.guid)),
+                    ("file_version", json!(info.file_version)),
+                    ("file_last_write_time", json!(info.file_last_write_time)),
+                ] {
+                    p.field(key, value, None);
+                }
+                p.line("}");
+            }
+            "programs" => {
+                p.line(format!(
+                    "  lifecycle @programs scope {} creation_languages {} readonly",
+                    if program_index.is_none() {
+                        "complete"
+                    } else {
+                        "selected"
+                    },
+                    json!(doc.program().program_languages())
+                ));
+                for (index, program) in doc
+                    .program()
+                    .programs()
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| program_index.is_none_or(|p| p == *i))
+                {
+                    p.line(format!("program_metadata @p{index} {{"));
+                    let values = [
+                        ("name", json!(program.name)),
+                        ("task", json!(program.task)),
+                        ("version", json!(program.version)),
+                        ("kind", json!(program.kind)),
+                        ("instance_name", json!(program.instance_name)),
+                        ("comment", json!(program.comment)),
+                    ];
+                    for (key, value) in values {
+                        let mut candidate = doc.clone();
+                        let args = json!({"program_index":index,"patch":{key:value.clone()}});
+                        let binding = (!value.is_null()
+                            && crate::operations::apply_operation(
+                                &mut candidate,
+                                "update_program",
+                                args,
+                            )
+                            .is_ok())
+                        .then(|| {
+                            Binding::new(
+                                "update_program",
+                                json!({"program_index":index,"patch":{}}),
+                                &["patch", key],
+                            )
+                        });
+                        p.field(key, value, binding);
+                    }
+                    for (key, value) in [
+                        ("object_id", json!(program.object_id)),
+                        ("local_variable", json!(program.local_variable)),
+                        ("find_program", json!(program.find_program)),
+                        ("find_var", json!(program.find_var)),
+                        ("encryption", json!(program.encryption)),
+                    ] {
+                        p.field(key, value, None);
+                    }
+                    p.line("}");
+                }
+            }
             "modules" => {
                 for (i, m) in doc.module().summaries().iter().enumerate() {
                     p.line(format!(
@@ -91,15 +211,19 @@ impl Projection {
                         literal(&json!(m.base)),
                         literal(&json!(m.slot))
                     ));
-                    p.field("id", json!(m.id), None);
-                    p.field("sub_type", json!(m.sub_type), None);
                     let model = xgwx::xgk_module_catalog()
                         .iter()
                         .find(|entry| Some(entry.id) == m.id && Some(entry.sub_type) == m.sub_type)
                         .map(|entry| entry.model);
-                    p.field("model", json!(model), None);
-                    p.field("native_name", json!(m.name), None);
                     let pos = m.base.zip(m.slot);
+                    let binding = module_model_binding(doc, pos, model);
+                    let value = if binding.is_some() {
+                        json!(model.unwrap_or(""))
+                    } else {
+                        json!(model)
+                    };
+                    p.field("model", value, binding);
+                    p.field("native_name", json!(m.name), None);
                     p.field(
                         "comment",
                         json!(m.comment),
@@ -166,7 +290,32 @@ impl Projection {
                 {
                     match vars {
                         Ok(vars) => {
+                            let mut probe = doc.clone();
+                            let mut probe_name = format!("IR_Lifecycle_Probe_{program}");
+                            while vars
+                                .iter()
+                                .any(|v| v.name.eq_ignore_ascii_case(&probe_name))
+                            {
+                                probe_name.push('_');
+                            }
+                            let writable = probe
+                                .program_mut()
+                                .get(program)
+                                .and_then(|mut p| p.variable_mut().insert(&probe_name, "BOOL", ""))
+                                .is_ok();
+                            p.line(format!("local_table @p{program} create {writable} order \"native_name\" readonly"));
+                            if writable {
+                                p.variable_lifecycle
+                                    .as_mut()
+                                    .unwrap()
+                                    .tables
+                                    .insert(program);
+                            }
                             for (index, v) in vars.iter().enumerate() {
+                                p.variable_lifecycle.as_mut().unwrap().sources.insert(
+                                    format!("@p{program}.v{index}"),
+                                    (program, index, v.name.clone()),
+                                );
                                 p.line(format!("variable @p{program}.v{index} {{"));
                                 let args = json!({"program_index":program,"symbol_index":index,"expected_name":v.name});
                                 p.field(
@@ -257,23 +406,47 @@ impl Projection {
                         p.field("id", json!(m.id), None);
                         p.field("type", json!(m.type_name), None);
                         p.field("name", json!(m.name), None);
+                        let position = m.base.zip(m.slot).filter(|&(base, slot)| {
+                            doc.network()
+                                .module_at(base, slot)
+                                .ok()
+                                .is_some_and(|member| {
+                                    member.network().map(|owner| owner.index()) == Some(n)
+                                        && member.summary() == *m
+                                })
+                        });
                         for (key, field, value) in [
                             ("config_name", "configName", json!(m.config_name)),
                             ("alias", "alias", json!(m.alias)),
                             ("description", "description", json!(m.description)),
                         ] {
-                            p.field(key,value.clone(),m.base.zip(m.slot).map(|(base,slot)|Binding::new("edit_browser_network",json!({"patch":{"network_index":n,"module":true,"base":base,"slot":slot,"field":field,"expected_value":value}}), &["patch","replacement"])));
+                            p.field(key,value.clone(),position.map(|(base,slot)|Binding::new("edit_browser_network",json!({"patch":{"network_index":n,"module":true,"base":base,"slot":slot,"field":field,"expected_value":value}}), &["patch","replacement"])));
                         }
                         p.line("}");
                     }
                 }
-                for (i, f) in doc.network().fenet_config_infos().iter().enumerate() {
+                let fenet_records = doc.network().fenet_config_infos();
+                for (i, f) in fenet_records.iter().enumerate() {
                     p.line(format!(
                         "fenet @f{i} base {} slot {} {{",
                         literal(&json!(f.base)),
                         literal(&json!(f.slot))
                     ));
-                    let pos = f.base.zip(f.slot);
+                    let pos = f.base.zip(f.slot).filter(|&(base, slot)| {
+                        fenet_records
+                            .iter()
+                            .filter(|record| record.base == Some(base) && record.slot == Some(slot))
+                            .count()
+                            == 1
+                            && doc
+                                .network()
+                                .module_at(base, slot)
+                                .ok()
+                                .is_some_and(|member| member.typed().fenet_config_info() == Some(f))
+                    });
+                    if pos.is_none() {
+                        p.field("association_status", json!("missing_or_ambiguous"), None);
+                    }
                     for (field, ip) in [
                         ("ipAddress", &f.ip_address),
                         ("subnet", &f.subnet),
@@ -343,7 +516,7 @@ impl Projection {
             _ => {
                 return Err(StoreError::new(
                     "invalid_arguments",
-                    "section must be program, modules, variables or networks",
+                    "section must be program, project, programs, modules, variables or networks",
                 ));
             }
         }
@@ -351,6 +524,16 @@ impl Projection {
     }
     pub fn lower_patch(&self, patch: &str) -> Result<Vec<EditOperation>, StoreError> {
         let changed = crate::text_ir::apply_unified_patch(&self.text, patch)?;
+        if let Some(lifecycle) = &self.lifecycle {
+            if let Some(operations) = lifecycle.lower(&self.text, &changed)? {
+                return Ok(operations);
+            }
+        }
+        if let Some(lifecycle) = &self.variable_lifecycle {
+            if let Some(operations) = lifecycle.lower(&self.text, &changed)? {
+                return Ok(operations);
+            }
+        }
         let old = self.text.lines().collect::<Vec<_>>();
         let new = changed.lines().collect::<Vec<_>>();
         if old.len() != new.len() {
@@ -360,7 +543,9 @@ impl Projection {
         }
         let mut ops = Vec::new();
         let mut structural = false;
+        let mut programs = BTreeMap::<u64, Value>::new();
         let mut globals = BTreeMap::<usize, Value>::new();
+        let mut modules = BTreeMap::<(u64, u64), Value>::new();
         let mut cnet = BTreeMap::<(u64, u64), Value>::new();
         for (i, (a, b)) in old.iter().zip(&new).enumerate() {
             if a == b {
@@ -405,7 +590,26 @@ impl Projection {
             }
             target[binding.path.last().unwrap()] = value;
             structural |= binding.structural;
-            if binding.operation == "update_variable" {
+            if binding.operation == "update_program" {
+                let index = args["program_index"].as_u64().unwrap();
+                programs
+                    .entry(index)
+                    .or_insert_with(|| json!({"program_index":index,"patch":{}}))["patch"]
+                    .as_object_mut()
+                    .unwrap()
+                    .extend(args["patch"].as_object().unwrap().clone());
+            } else if binding.operation == "update_module" {
+                let pos = (
+                    args["base"].as_u64().unwrap(),
+                    args["slot"].as_u64().unwrap(),
+                );
+                modules
+                    .entry(pos)
+                    .or_insert_with(|| json!({"base":pos.0,"slot":pos.1,"patch":{}}))["patch"]
+                    .as_object_mut()
+                    .unwrap()
+                    .extend(args["patch"].as_object().unwrap().clone());
+            } else if binding.operation == "update_variable" {
                 let index = args["variable_index"].as_u64().unwrap() as usize;
                 globals
                     .entry(index)
@@ -426,6 +630,14 @@ impl Projection {
                 });
             }
         }
+        ops.extend(programs.into_values().map(|args| EditOperation {
+            name: "update_program".into(),
+            args,
+        }));
+        ops.extend(modules.into_values().map(|args| EditOperation {
+            name: "update_module".into(),
+            args,
+        }));
         ops.extend(globals.into_values().map(|args| EditOperation {
             name: "update_variable".into(),
             args,
@@ -436,7 +648,7 @@ impl Projection {
         }));
         if structural && ops.len() != 1 {
             return Err(invalid(
-                "IEC local rename/type/address changes must be the sole mutation; re-export afterward",
+                "Module model replacement and IEC local rename/type/address changes must be the sole mutation; re-export afterward",
             ));
         }
         Ok(ops)

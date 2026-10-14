@@ -4,22 +4,15 @@ Locate files with shell commands. Inspect or export the chosen target:
 
 | Task | Reference source | Tool and value field |
 | --- | --- | --- |
-| Rename a program | `inspect_file` overview/programs/program summary, or `search_project(kind:"program")` | `rename_program`, `name` |
+| Rename a program | `get_ir(section:"programs", program_index:...)` | `apply_patch`, editable name |
 | Update a module comment | `get_ir(section:"modules")` | `apply_patch`, editable comment |
 | Change one contact operand | `get_ir(section:"program", program_index:...)` | `apply_patch`, contact operand |
 
-`rename_program` accepts `path`, `object_ref`, its value field, and optional
-`dry_run` (default false). Copy references as-is. They are bound to the canonical
-file, revision, kind and observed identity/value. They are not permission or a
-writability certificate. The server resolves current data and retains the
-library's original identity, expected-text, type, layout and physical-selection
-guards. Marker-only contacts without operand strings do not receive references.
-
-`rename_program` saves immediately unless dry-running. Its `changes` list includes
-a readable summary, target context, field, before and after values. Report the
-usual validation, new revision and backup. Contact edits affect one use; they do
-not rename a symbol or change its other uses. Use existing operation workflows
-for broader changes.
+Export the property or program document and submit an exact unified diff with
+its current revision. Use `dry_run:true` for a preview; saved changes use normal
+backup and verification behavior. Contact edits affect one use and do not rename
+a symbol. Object references remain useful for the prepared preview workflow
+below; its explicit `rename_program` change type is still supported.
 
 ## Prepare and commit
 

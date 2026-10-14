@@ -408,8 +408,8 @@ async fn stdio_references_common_tools_preview_commit_and_recovery() {
     let module = &modules["data"]["modules"]["items"][0]["object_ref"];
     let direct = client
         .call_tool(call(
-            "rename_program",
-            json!({"path":"p.xgwx","object_ref":program,"name":"Conveyor","dry_run":true}),
+            "prepare_change",
+            json!({"path":"p.xgwx","changes":[{"type":"rename_program","object_ref":program,"name":"Conveyor"}]}),
         ))
         .await
         .unwrap();

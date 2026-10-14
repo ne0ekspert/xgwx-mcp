@@ -13,7 +13,7 @@ Manual section(s): 4.1.5. Original Korean notes below may cover the other varian
 
 ## Editing route
 
-Use `edit_ladder_cell` after calling `describe_operation` for its current schema.
+Use `get_ir` → `apply_patch` for this instruction edit. `edit_ladder_cell` is the internal writer route, not a separate MCP tool. Preserve the exported revision and native constraints.
 Set the replacement element kind to `RisingPulse`. `R_EDGE` describes `logic_cell` placement; it is represented by a physical cell rather than an application opcode.
 Inspect the CPU/project and target cells first. Use the inspected revision and positions, preserve expected values, dry-run when useful, then save and inspect the result. See the [editing skill](../../SKILL.md) and [ladder workflow](../ladder.md).
 
